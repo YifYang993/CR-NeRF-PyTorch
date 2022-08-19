@@ -135,3 +135,4 @@ If you find our work useful, please consider citing:
 
 # Acknowledge
 Our code is based on the awesome pytorch implementation of NeRF in the Wild ([NeRF-W](https://github.com/kwea123/nerf_pl/tree/nerfw/)). We appreciate all the contributors.
+# nerfW
