@@ -243,7 +243,7 @@ class NeRFSystem(LightningModule):
             W, H = self.hparams.img_wh
             uv_sample = None
 
-        if self.hparams.encode_a or self.hparams.use_mask or self.hparams.deocclusion:
+        if self.hparams.encode_a or self.hparams.use_mask :#or self.hparams.deocclusion:
             if self.hparams.dataset_name == 'phototourism':
                 whole_img = batch['whole_img']
             else:

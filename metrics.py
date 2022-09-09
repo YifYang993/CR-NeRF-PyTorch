@@ -16,5 +16,5 @@ def ssim(image_pred, image_gt, reduction='mean'):
     """
     image_pred and image_gt: (1, 3, H, W)
     """
-    dssim_ = dssim(image_pred, image_gt, 3, reduction) # dissimilarity in [0, 1]
+    dssim_ = dssim(image_pred, image_gt, 3) # dissimilarity in [0, 1]
     return 1-2*dssim_ # in [-1, 1]
