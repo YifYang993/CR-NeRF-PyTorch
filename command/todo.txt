@@ -1,0 +1,24 @@
+feature with volume rendering 
+ablation of mpi
+
+feature with volume rendering   gets better results   sharper color no fuzzy part
+
+discuss the feature rendering of volume!
+further design the neural renderer especially the number of depth layer and blur block
+
+20220914 1215: running esrgan  and   baseline gan
+
+20220914 2324: RUNNING PERTURBATION  on  xyz_   0001
+20220914 2324: RUNNING PERTURBATION  on  xyz_   00001
+
+
+gpu023 card 5,6,7 20220927 1-4-1 model tanh and sigmoid  
+gpu023 card 5,6,7 20220927 1-4-1 model tanh and sigmoid  RUNNING PERTURBATION  on  xyz_   00001
+
+
+20220930 gpu023 6,7 nerf sigmoid -> tanh   decoder sigmoid-> tanh  !down up decoder better than sigmoid 
+20221008 gpu024 6,7 nerf sigmoid -> tanh   decoder sigmoid-> tanh !11decoder
+
+20221010 gpu024 3,5 style nerf  "gnerf_fvr_style_64_esrganblock1_tanhinNerfDecoder" 
+20221010 gpu024 3,5 style nerf  "gnerf_fvr_style_64_esrganblock2_tanhinNerfDecoder"
+20221010 gpu024 3,5 style nerf  "gnerf_fvr_style_64_esrganblock1_filter32_tanhinNerfDecoder"

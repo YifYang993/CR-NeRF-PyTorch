@@ -225,6 +225,7 @@ class PhototourismDataset(Dataset):
         if self.split == 'train':
             self.iterations = len(self.all_rays)//self.batch_size
             return self.iterations
+            # return 1 
         if self.split == 'test_train':
             return self.N_images_train
         if self.split == 'val':

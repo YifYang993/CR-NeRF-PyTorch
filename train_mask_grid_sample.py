@@ -317,9 +317,10 @@ def main(hparams):
     checkpoint_callback = \
         ModelCheckpoint(filepath=os.path.join(hparams.save_dir,
                                               f'ckpts/{hparams.exp_name}', '{epoch:d}'),
-                        monitor='val/psnr',
-                        mode='max',
-                        save_top_k=-1)
+                        # monitor='val/psnr',
+                        # mode='max',
+                        # save_top_k=1,
+                        save_last=True)
 
     logger = TestTubeLogger(save_dir=os.path.join(hparams.save_dir,"logs"),
                             name=hparams.exp_name,
@@ -341,6 +342,30 @@ def main(hparams):
 
     trainer.fit(system)
 
+from pytorch_lightning.utilities.distributed import rank_zero_only
+@rank_zero_only
+def save_code(hparams):
+    import datetime
+    import shutil
+    from distutils.dir_util import copy_tree
+    now = datetime.datetime.now()
+    # timestr=str(now.month)+str(now.day)+str(now.hour)+str(now.minute)+str(now.second)
+    experiment_dir = os.path.join(hparams.save_dir,'logs',hparams.exp_name,"codes")
+    copy_tree('models/', experiment_dir+"/models")
+    copy_tree('datasets/', experiment_dir+"/datasets")
+    copy_tree('utils/', experiment_dir+"/utils")
+    # shutil.copy('datasets/phototourism_mask_grid_sample.py', experiment_dir)
+    shutil.copy('train_mask_grid_sample.py', experiment_dir)
+    shutil.copy('losses.py', experiment_dir)
+    shutil.copy('eval.py',experiment_dir)
+    shutil.copy('eval_metric.py', experiment_dir)
+    shutil.copy('opt.py', experiment_dir)
+    shutil.copy('metrics.py', experiment_dir)
+    logstr=str(hparams)
+    with open(experiment_dir+"/command.txt",'w') as f:
+        f.writelines(logstr)
+
 if __name__ == '__main__':
     hparams = get_opts()
+    save_code(hparams)
     main(hparams)
