@@ -79,7 +79,7 @@ class NeRFSystem(LightningModule):
         items.pop("v_num", None)
         return items
 
-    def forward(self, rays, ts, whole_img, W, H, rgb_idx, uv_sample, test_blender):
+    def forward(self, rays, ts, whole_img, W, H, rgb_idx, uv_sample, test_blender,val_mode=False):
         results = defaultdict(list)
         kwargs ={}
         if self.hparams.encode_a:
@@ -97,18 +97,21 @@ class NeRFSystem(LightningModule):
 
         """Do batched inference on rays using chunk."""
         B = rays.shape[0]
-        for i in range(0, B, self.hparams.chunk):
+        chunk_temp=self.hparams.chunk
+        if val_mode==True:
+            chunk_temp=2048
+        for i in range(0, B, chunk_temp):
             rendered_ray_chunks = \
                 render_rays(self.models,
                             self.embeddings,
-                            rays[i:i+self.hparams.chunk],
-                            ts[i:i+self.hparams.chunk],
+                            rays[i:i+chunk_temp],
+                            ts[i:i+chunk_temp],
                             self.hparams.N_samples,
                             self.hparams.use_disp,
                             self.hparams.perturb,
                             self.hparams.noise_std,
                             self.hparams.N_importance,
-                            self.hparams.chunk, # chunk size is effective in val mode
+                            chunk_temp, # chunk size is effective in val mode
                             self.train_dataset.white_back,
                             **kwargs)
 
@@ -233,6 +236,8 @@ class NeRFSystem(LightningModule):
         return loss
 
     def validation_step(self, batch, batch_nb):
+        if self.current_epoch!=self.hparams.num_epochs -1:
+            return 0
         rays, ts = batch['rays'].squeeze(), batch['ts'].squeeze()
         rgbs =  batch['rgbs'].squeeze()
         if self.hparams.dataset_name == 'phototourism':
@@ -254,7 +259,7 @@ class NeRFSystem(LightningModule):
             rgb_idx = None
 
         test_blender = (self.hparams.dataset_name == 'blender')
-        results = self(rays, ts, whole_img, W, H, rgb_idx, uv_sample, test_blender)
+        results = self(rays, ts, whole_img, W, H, rgb_idx, uv_sample, test_blender, val_mode=True)
         loss_d, AnnealingWeight = self.loss(results, rgbs, self.hparams, self.global_step)
         loss = sum(l for l in loss_d.values())
         log = {'val_loss': loss}
@@ -295,6 +300,8 @@ class NeRFSystem(LightningModule):
         return log
 
     def validation_epoch_end(self, outputs):
+        if self.current_epoch!=self.hparams.num_epochs -1:
+            return 0
         if len(outputs) == 1:
             global_val.current_epoch = self.current_epoch
         else:
