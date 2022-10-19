@@ -53,9 +53,9 @@ class HaNeRFLoss(nn.Module):
             ret['kl_a'] = self._l2_regularize(inputs['a_embedded']) * hparams.weightKL
             if 'a_embedded_random_rec' in inputs:
                 ret['rec_a_random'] = torch.mean(torch.abs(inputs['a_embedded_random'].detach() - inputs['a_embedded_random_rec'])) * hparams.weightRecA
-                # ret['mode_seeking'] = hparams.weightMS * 1 / \
-                #   ((torch.mean(torch.abs(inputs['rgb_fine'].detach() - inputs['rgb_fine_random'])) / \
-                #   torch.mean(torch.abs(inputs['a_embedded'].detach() - inputs['a_embedded_random'].detach()))) + 1 * 1e-5)
+                ret['mode_seeking'] = hparams.weightMS * 1 / \
+                  ((torch.mean(torch.abs(inputs['rgb_fine'].detach() - inputs['rgb_fine_random'])) / \
+                  torch.mean(torch.abs(inputs['a_embedded'].detach() - inputs['a_embedded_random'].detach()))) + 1 * 1e-5)
 
         if 'out_mask' in inputs:
             mask = inputs['out_mask']

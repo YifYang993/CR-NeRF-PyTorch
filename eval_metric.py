@@ -87,10 +87,14 @@ if __name__ == "__main__":
         rgbs = sample['rgbs']
         img_gt = rgbs.view(h, w, 3)
         if args.dataset_name == 'phototourism':
-            psnrs += [metrics.psnr(img_gt[:,w//2:,:], img_pred.permute(1, 2, 0)[:,w//2:,:]).item()]
-            ssims += [metrics.ssim(img_gt[:,w//2:,:].permute(2, 0, 1)[None,...], img_pred[:, :, w//2:][None,...]).item()]
-            lpips_alexs += [lpips_alex((img_gt[:,w//2:,:].permute(2, 0, 1)[None,...]*2-1), normalize_img_pre[...,w//2:]).item()]
-            mses += [((img_gt[:,w//2:,:] - img_pred.permute(1, 2, 0)[:,w//2:,:])**2).mean().item()]
+            # psnrs += [metrics.psnr(img_gt[:,w//2:,:], img_pred.permute(1, 2, 0)[:,w//2:,:]).item()]
+            psnrs += [metrics.psnr(img_gt[:,w//2:,:], img_pred.permute(1, 2, 0)[:,w//2:,:])]
+            # ssims += [metrics.ssim(img_gt[:,w//2:,:].permute(2, 0, 1)[None,...], img_pred[:, :, w//2:][None,...]).item()]
+            ssims += [metrics.ssim(img_gt[:,w//2:,:].permute(2, 0, 1)[None,...], img_pred[:, :, w//2:][None,...])]
+            # lpips_alexs += [lpips_alex((img_gt[:,w//2:,:].permute(2, 0, 1)[None,...]*2-1), normalize_img_pre[...,w//2:]).item()]
+            lpips_alexs += [lpips_alex((img_gt[:,w//2:,:].permute(2, 0, 1)[None,...]*2-1), normalize_img_pre[...,w//2:])]
+            # mses += [((img_gt[:,w//2:,:] - img_pred.permute(1, 2, 0)[:,w//2:,:])**2).mean().item()]
+            mses += [((img_gt[:,w//2:,:] - img_pred.permute(1, 2, 0)[:,w//2:,:])**2).mean()]
         else:
             psnrs += [metrics.psnr(img_gt, img_pred.permute(1, 2, 0)).item()]
             ssims += [metrics.ssim(img_gt.permute(2, 0, 1)[None,...], img_pred[None,...]).item()]
@@ -102,14 +106,16 @@ if __name__ == "__main__":
         imageio.mimsave(os.path.join(dir_name, f'{args.scene_name}_30.{args.video_format}'),
                         imgs, fps=30)
     
-    mean_psnr = np.mean(psnrs)
-    mean_ssim = np.mean(ssims)
-    mean_lpips_alex = np.mean(lpips_alexs)
-    mean_mse = np.mean(mses)
+    mean_psnr = torch.mean(torch.stack(psnrs)).item()
+    mean_ssim = torch.mean(torch.stack([x.mean() for x in ssims])).item()
+    mean_lpips_alex =torch.mean(torch.stack(lpips_alexs)).item()
+    mean_mse =torch.mean(torch.stack(mses)).item()
     with open(os.path.join(dir_name, 'result.txt'), "a") as f:
         f.write(f'metrics : \n')
         f.write(f'Mean PSNR : {mean_psnr:.4f}\n')
         f.write(f'Mean SSIM : {mean_ssim:.4f}\n')
         f.write(f'Mean LIPIS_alex : {mean_lpips_alex:.4f}\n')
         f.write(f'Mean MSE : {mean_mse:.4f}\n')
-    print('Done')
+    print('Mean PSNR',mean_psnr)
+    print('Mean SSIM' ,mean_ssim)
+    print('Mean LIPIS_alex',mean_lpips_alex)
