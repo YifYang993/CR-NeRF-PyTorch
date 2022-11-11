@@ -22,3 +22,8 @@ gpu023 card 5,6,7 20220927 1-4-1 model tanh and sigmoid  RUNNING PERTURBATION  o
 20221010 gpu024 3,5 style nerf  "gnerf_fvr_style_64_esrganblock1_tanhinNerfDecoder" 
 20221010 gpu024 3,5 style nerf  "gnerf_fvr_style_64_esrganblock2_tanhinNerfDecoder"
 20221010 gpu024 3,5 style nerf  "gnerf_fvr_style_64_esrganblock1_filter32_tanhinNerfDecoder"
+
+20211110 whole img range
+
+2021111 SAC  RERUN due to normalize issue of original paper "1111_hanerf_encodea_random_mask_sacre_coeurv1" gpu023 0,3
+2021111 TREVI RERUN due to normalize issue of original paper "1111_hanerf_encodea_random_mask_trevi_fountainv1" gpu022 0,1,2,4

@@ -86,6 +86,9 @@ class NeRFSystem(LightningModule):
             if test_blender:
                 kwargs['a_embedded_from_img'] = self.embedding_a_list[0] if self.embedding_a_list[0] != None else self.enc_a(whole_img)
             else:
+                # whole_img=(whole_img+1)/2
+                # print(torch.max(whole_img), torch.min(whole_img),"torch.max(whole_img), torch.min(whole_img) 89")
+                
                 kwargs['a_embedded_from_img'] = self.enc_a(whole_img)
 
             if self.hparams.encode_random:
@@ -133,6 +136,7 @@ class NeRFSystem(LightningModule):
             if self.hparams.encode_random:
                 results['a_embedded_random'] = kwargs['a_embedded_random']
                 rec_img_random = results['rgb_fine_random'].view(1, H, W, 3).permute(0, 3, 1, 2) * 2 - 1
+                # print(torch.max(rec_img_random), torch.min(rec_img_random),"torch.max(rec_img_random), torch.min(rec_img_random) 136")
                 results['a_embedded_random_rec'] = self.enc_a(rec_img_random)
                 self.embedding_a_list[ts[0]] = kwargs['a_embedded_from_img'].clone().detach()
 
