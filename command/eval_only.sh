@@ -8,8 +8,8 @@ nerf_out_dim1=64
 # exp_name1="gnerf_fvr_baseline_no_perturb64_updowndecoder1_sigmoid"
 # exp_name1="gnerf_fvr_baseline_no_perturb64_updowndecoder1_tanh"
 # exp_name1="gnerf_fvr_baseline_no_perturb64_updowndecoder1_tanh_perturb000001"
-declare -a StringArray=("gnerf_fvr_style_64_esrganblock1_tanhinNerfDecoder")
-gpu1=5
+declare -a StringArray=("1114_nerf_ds2")
+gpu1=6
 
 for val in ${StringArray[@]}; do
 
@@ -34,7 +34,7 @@ for val in ${StringArray[@]}; do
     --N_samples 256 --N_importance 256 --N_emb_xyz 15 \
     --N_vocab 1500  \
     --ckpt_path $ckpt_path1 \
-    --chunk 1024 --img_wh 320 240  --nerf_out_dim $nerf_out_dim1 --model_mode $model_mode1 --decoder $decoder --decoder_num_res_blocks $decoder_num_res_blocks
+    --chunk 1024 --img_wh 320 240  --encode_a #--nerf_out_dim $nerf_out_dim1 --model_mode $model_mode1 --decoder $decoder --decoder_num_res_blocks $decoder_num_res_blocks 
 
   CUDA_VISIBLE_DEVICES=$gpu1  python eval_metric.py \
     --root_dir $root_dir1 \
