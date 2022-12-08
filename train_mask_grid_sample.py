@@ -327,7 +327,7 @@ def main(hparams):
     system = NeRFSystem(hparams)
     checkpoint_callback = \
         ModelCheckpoint(filepath=os.path.join(hparams.save_dir,
-                                              f'ckpts/{hparams.exp_name}', '{epoch:d}'),
+                                              f'ckpts/{hparams.exp_name}'),
                         # monitor='val/psnr',
                         # mode='max',
                         # save_top_k=1,

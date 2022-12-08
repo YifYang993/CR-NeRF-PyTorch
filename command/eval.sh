@@ -1,7 +1,7 @@
 
 ####记得改名字 记得拷贝getmodel
 
-cd /mnt/cephfs/home/yangyifan/yangyifan/code/learnToSyLf/Ha-NeRF; source activate ;conda activate HaNeRF;
+cd /mnt/cephfs/home/yangyifan/yangyifan/code/learnToSyLf/Ha-NeRF; source activate ;conda activate hanerf3090;
 nerf_out_dim1=64
 exp_name1="1114_nerf_ds2"
 # exp_name1="debug"
