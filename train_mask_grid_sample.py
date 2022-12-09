@@ -129,6 +129,8 @@ class NeRFSystem(LightningModule):
                 results['out_mask'] = torch.zeros(results['rgb_fine'].shape[0], 1).to(results['rgb_fine'])
             else:
                 uv_embedded = self.embedding_uv(uv_sample)
+                # print(uv_embedded.size(), uv_sample.size(), self.embedding_view(ts).size(),"uv_embedded.size(), uv_sample.size(), self.embedding_view(ts).size()")
+                # torch.Size([1024, 42]) torch.Size([1024, 2]) torch.Size([1024, 128])
                 results['out_mask'] = self.implicit_mask(torch.cat((self.embedding_view(ts), uv_embedded), dim=-1))
 
         if self.hparams.encode_a:
