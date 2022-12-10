@@ -3,8 +3,8 @@
 
 cd /mnt/cephfs/home/yangyifan/yangyifan/code/learnToSyLf/Ha-NeRF; source activate ;conda activate hanerf3090;
 nerf_out_dim1=64
-loadname="hanerf_3090ds2_check"
-exp_name1="hanerf_3090ds2_checkv1"
+loadname="hanerf_3090ds2_checkv1"
+exp_name1="hanerf_3090ds2_checkv2"
 
 # exp_name1="debug"
 # model_mode1="1-1" #|1-4-1|1-1
@@ -22,7 +22,7 @@ CUDA_VISIBLE_DEVICES=6 python train_mask_grid_sample.py   --root_dir $root_dir1 
 
 
 cd /mnt/cephfs/dataset/NVS/nerfInWild/experimental_results/logs/$exp_name1/codes
-CUDA_VISIBLE_DEVICES=6 python eval.py \
+CUDA_VISIBLE_DEVICES=5,6 python eval.py \
   --root_dir $root_dir1 \
   --save_dir $save_dir1 \
   --dataset_name $dataset_name1 --scene_name $exp_name1 \
