@@ -1,0 +1,116 @@
+
+####记得改名字 记得拷贝getmodel
+ckpt_path1="/mnt/cephfs/dataset/NVS/nerfInWild/experimental_results/ckpts/${exp_name1}/last.ckpt"
+cd /mnt/cephfs/home/yangyifan/yangyifan/code/learnToSyLf/Ha-NeRF; 
+source /mnt/cephfs/home/yangyifan/miniconda/etc/profile.d/conda.sh
+# conda activate HaNeRF;
+conda activate hanerf3090v1
+nerf_out_dim1=64
+dataset_name1='phototourism'
+save_dir1=/mnt/cephfs/dataset/NVS/nerfInWild/experimental_results
+img_downscale=2
+
+# exp_name1="debug"
+# model_mode1="1-1" #|1-4-1|1-1
+# decoder='stylenerf'  #esrgan||stylenerf
+
+##########################################
+exp_name1="nerf_brabden_ds2"
+root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/brandenburg_gate/"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/trevi_fountain/"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/sacre_coeur/"
+
+
+CUDA_VISIBLE_DEVICES=4,5,6 python train_mask_grid_sample.py   --root_dir $root_dir1 --dataset_name $dataset_name1   --save_dir $save_dir1 --img_downscale $img_downscale --use_cache   --N_importance 64 --N_samples 64   --num_epochs 20 --batch_size 1024   --optimizer adam --lr 5e-4 --lr_scheduler cosine   --exp_name $exp_name1 --N_emb_xyz 15 --N_vocab 3200   --maskrs_max 5e-2 --maskrs_min 6e-3 --maskrs_k 1e-3 --maskrd 0   --N_a 48 --weightKL 1e-5 --weightRecA 1e-3 --weightMS 1e-6   --num_gpus 3 --chunk 131072  #--use_mask --encode_a --encode_random   #--ckpt_path $ckpt_path1 #--model_mode $model_mode1 --decoder $decoder --decoder_num_res_blocks $decoder_num_res_blocks --num_epochs 1
+#############################################
+
+#############################################
+exp_name1="nerf_trevi_fountain_ds2"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/brandenburg_gate/"
+root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/trevi_fountain/"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/sacre_coeur/"
+
+
+CUDA_VISIBLE_DEVICES=4,5,6 python train_mask_grid_sample.py   --root_dir $root_dir1 --dataset_name $dataset_name1   --save_dir $save_dir1 --img_downscale $img_downscale --use_cache   --N_importance 64 --N_samples 64   --num_epochs 20 --batch_size 1024   --optimizer adam --lr 5e-4 --lr_scheduler cosine   --exp_name $exp_name1 --N_emb_xyz 15 --N_vocab 3200   --maskrs_max 5e-2 --maskrs_min 6e-3 --maskrs_k 1e-3 --maskrd 0   --N_a 48 --weightKL 1e-5 --weightRecA 1e-3 --weightMS 1e-6   --num_gpus 3 --chunk 131072  #--use_mask --encode_a --encode_random   #--ckpt_path $ckpt_path1 #--model_mode $model_mode1 --decoder $decoder --decoder_num_res_blocks $decoder_num_res_blocks --num_epochs 1
+#############################################
+
+exp_name1="nerf_sacre_coeur_ds2"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/brandenburg_gate/"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/trevi_fountain/"
+root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/sacre_coeur/"
+
+
+CUDA_VISIBLE_DEVICES=4,5,6 python train_mask_grid_sample.py   --root_dir $root_dir1 --dataset_name $dataset_name1   --save_dir $save_dir1 --img_downscale $img_downscale --use_cache   --N_importance 64 --N_samples 64   --num_epochs 20 --batch_size 1024   --optimizer adam --lr 5e-4 --lr_scheduler cosine   --exp_name $exp_name1 --N_emb_xyz 15 --N_vocab 3200   --maskrs_max 5e-2 --maskrs_min 6e-3 --maskrs_k 1e-3 --maskrd 0   --N_a 48 --weightKL 1e-5 --weightRecA 1e-3 --weightMS 1e-6   --num_gpus 3 --chunk 131072  #--use_mask --encode_a --encode_random   #--ckpt_path $ckpt_path1 #--model_mode $model_mode1 --decoder $decoder --decoder_num_res_blocks $decoder_num_res_blocks --num_epochs 1
+
+#############################################
+exp_name1="nerf_brabden_ds2"
+root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/brandenburg_gate/"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/trevi_fountain/"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/sacre_coeur/"
+cd /mnt/cephfs/dataset/NVS/nerfInWild/experimental_results/logs/$exp_name1/codes
+
+CUDA_VISIBLE_DEVICES=5 python eval.py \
+  --root_dir $root_dir1 \
+  --save_dir $save_dir1 \
+  --dataset_name $dataset_name1 --scene_name $exp_name1 \
+  --split test_test --img_downscale $img_downscale \
+  --N_samples 256 --N_importance 256 --N_emb_xyz 15 \
+  --N_vocab 1500  \
+  --ckpt_path $ckpt_path1 \
+  --chunk 2048 --img_wh 320 240  #--encode_a #--model_mode $model_mode1 --decoder $decoder --decoder_num_res_blocks $decoder_num_res_blocks
+
+CUDA_VISIBLE_DEVICES=4  python eval_metric.py \
+  --root_dir $root_dir1 \
+  --save_dir $save_dir1 \
+  --dataset_name $dataset_name1 --scene_name $exp_name1 \
+  --split test_test --img_downscale $img_downscale \
+  --img_wh 320 240
+
+  ####################
+exp_name1="nerf_trevi_fountain_ds2"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/brandenburg_gate/"
+root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/trevi_fountain/"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/sacre_coeur/"
+cd /mnt/cephfs/dataset/NVS/nerfInWild/experimental_results/logs/$exp_name1/codes
+
+CUDA_VISIBLE_DEVICES=5 python eval.py \
+  --root_dir $root_dir1 \
+  --save_dir $save_dir1 \
+  --dataset_name $dataset_name1 --scene_name $exp_name1 \
+  --split test_test --img_downscale $img_downscale \
+  --N_samples 256 --N_importance 256 --N_emb_xyz 15 \
+  --N_vocab 1500  \
+  --ckpt_path $ckpt_path1 \
+  --chunk 2048 --img_wh 320 240  #--encode_a #--model_mode $model_mode1 --decoder $decoder --decoder_num_res_blocks $decoder_num_res_blocks
+
+CUDA_VISIBLE_DEVICES=4  python eval_metric.py \
+  --root_dir $root_dir1 \
+  --save_dir $save_dir1 \
+  --dataset_name $dataset_name1 --scene_name $exp_name1 \
+  --split test_test --img_downscale $img_downscale \
+  --img_wh 320 240
+
+  
+############################
+exp_name1="nerf_sacre_coeur_ds2"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/brandenburg_gate/"
+# root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/trevi_fountain/"
+root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/sacre_coeur/"
+cd /mnt/cephfs/dataset/NVS/nerfInWild/experimental_results/logs/$exp_name1/codes
+
+CUDA_VISIBLE_DEVICES=5 python eval.py \
+  --root_dir $root_dir1 \
+  --save_dir $save_dir1 \
+  --dataset_name $dataset_name1 --scene_name $exp_name1 \
+  --split test_test --img_downscale $img_downscale \
+  --N_samples 256 --N_importance 256 --N_emb_xyz 15 \
+  --N_vocab 1500  \
+  --ckpt_path $ckpt_path1 \
+  --chunk 2048 --img_wh 320 240  #--encode_a #--model_mode $model_mode1 --decoder $decoder --decoder_num_res_blocks $decoder_num_res_blocks
+
+CUDA_VISIBLE_DEVICES=4  python eval_metric.py \
+  --root_dir $root_dir1 \
+  --save_dir $save_dir1 \
+  --dataset_name $dataset_name1 --scene_name $exp_name1 \
+  --split test_test --img_downscale $img_downscale \
+  --img_wh 320 240

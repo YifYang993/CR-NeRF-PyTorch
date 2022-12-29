@@ -119,6 +119,10 @@ def get_opts():
 
     parser.add_argument('--exp_name', type=str, default='exp',
                         help='experiment name')
+    parser.add_argument('--proj_name', type=str, default='gnerf_project',
+                        help='experiment name')
+    parser.add_argument('--wandbsavepath', type=str, default="/mnt/cephfs/dataset/NVS/nerfInWild/experimental_results",
+                        help='checkpoint path to save')
     parser.add_argument('--refresh_every', type=int, default=1,
                         help='print the progress bar every X steps')
 

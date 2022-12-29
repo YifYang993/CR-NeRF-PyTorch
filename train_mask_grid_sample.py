@@ -1,5 +1,5 @@
 import os
-
+import wandb
 from numpy.lib.utils import who
 from opt import get_opts
 import torch
@@ -214,7 +214,7 @@ class NeRFSystem(LightningModule):
             self.log(f'train/{k}', v)
         self.log('train/psnr', psnr_)
 
-        if (self.global_step + 1) % 5000 == 0:
+        if (self.global_step + 1) % 5000 == 0 or (self.global_step + 1)==2:
             img = results[f'rgb_{typ}'].detach().view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
             img_gt = rgbs.detach().view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
             depth = visualize_depth(results[f'depth_{typ}'].detach().view(H, W)) # (3, H, W)
@@ -222,22 +222,18 @@ class NeRFSystem(LightningModule):
                 mask = results['out_mask'].detach().view(H, W, 1).permute(2, 0, 1).repeat(3, 1, 1).cpu() # (3, H, W)
                 if 'rgb_fine_random' in results:
                     img_random = results[f'rgb_fine_random'].detach().view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
-                    stack = torch.stack([img_gt, img, depth, img_random, mask]) # (4, 3, H, W)
-                    self.logger.experiment.add_images('train/GT_pred_depth_random_mask',
-                                                      stack, self.global_step)
+                    stack = [img_gt, img, depth, img_random, mask]# (4, 3, H, W)
+                    self.logger.experiment.log({    "samples": [wandb.Image(img) for img in stack]})
                 else:
-                    stack = torch.stack([img_gt, img, depth, mask]) # (3, 3, H, W)
-                    self.logger.experiment.add_images('train/GT_pred_depth_mask',
-                                                      stack, self.global_step)
+                    stack = [img_gt, img, depth, mask] # (3, 3, H, W)
+                    self.logger.experiment.log({    "samples": [wandb.Image(img) for img in stack]})
             elif 'rgb_fine_random' in results:
                 img_random = results[f'rgb_fine_random'].detach().view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
-                stack = torch.stack([img_gt, img, depth, img_random]) # (4, 3, H, W)
-                self.logger.experiment.add_images('train/GT_pred_depth_random',
-                                                  stack, self.global_step)
+                stack = [img_gt, img, depth, img_random] # (4, 3, H, W)
+                self.logger.experiment.log({    "samples": [wandb.Image(img) for img in stack]})
             else:
-                stack = torch.stack([img_gt, img, depth]) # (3, 3, H, W)
-                self.logger.experiment.add_images('train/GT_pred_depth',
-                                                  stack, self.global_step)
+                stack = [img_gt, img, depth] # (3, 3, H, W)
+                self.logger.experiment.log({    "samples": [wandb.Image(img) for img in stack]})
         
         return loss
 
@@ -281,22 +277,18 @@ class NeRFSystem(LightningModule):
                 mask = results['out_mask'].detach().view(H, W, 1).permute(2, 0, 1).repeat(3, 1, 1).cpu() # (3, H, W)
                 if 'rgb_fine_random' in results:
                     img_random = results[f'rgb_fine_random'].detach().view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
-                    stack = torch.stack([img_gt, img, depth, img_random, mask]) # (5, 3, H, W)
-                    self.logger.experiment.add_images('val/GT_pred_depth_random_mask',
-                                                      stack, self.global_step)
+                    stack = [img_gt, img, depth, img_random, mask] # (5, 3, H, W)
+                    self.logger.experiment.log({    "samples": [wandb.Image(img) for img in stack]})
                 else:
-                    stack = torch.stack([img_gt, img, depth, mask]) # (4, 3, H, W)
-                    self.logger.experiment.add_images('val/GT_pred_depth_mask',
-                                                      stack, self.global_step)
+                    stack = torch.stack[img_gt, img, depth, mask] # (4, 3, H, W)
+                    self.logger.experiment.log({    "samples": [wandb.Image(img) for img in stack]})
             elif 'rgb_fine_random' in results:
                 img_random = results[f'rgb_fine_random'].detach().view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
-                stack = torch.stack([img_gt, img, depth, img_random]) # (4, 3, H, W)
-                self.logger.experiment.add_images('val/GT_pred_depth_random',
-                                                  stack, self.global_step)
+                stack = [img_gt, img, depth, img_random] # (4, 3, H, W)
+                self.logger.experiment.log({    "samples": [wandb.Image(img) for img in stack]})
             else:
-                stack = torch.stack([img_gt, img, depth]) # (3, 3, H, W)
-                self.logger.experiment.add_images('val/GT_pred_depth',
-                                                  stack, self.global_step)
+                stack = [img_gt, img, depth] # (3, 3, H, W)
+                self.logger.experiment.log({    "samples": [wandb.Image(img) for img in stack]})
 
         psnr_ = psnr(results[f'rgb_{typ}'], rgbs)
         ssim_ = ssim(img[None,...], img_gt[None,...])
@@ -325,7 +317,52 @@ class NeRFSystem(LightningModule):
             self.log('val/r_ms', torch.stack([x['r_ms'] for x in outputs]).mean())
             self.log('val/r_md', torch.stack([x['r_md'] for x in outputs]).mean())
 
-def main(hparams):
+
+def main(hparams__):
+
+    system = NeRFSystem(hparams__)
+    checkpoint_callback = \
+        ModelCheckpoint(dirpath=os.path.join(hparams__.save_dir,  ###change3 filepath->dirpath
+                                              f'ckpts/{hparams__.exp_name}'), save_last=True) ####replace dirpath
+
+
+    # ###saving code####
+
+    from pytorch_lightning.loggers import WandbLogger
+    wandb_logger = WandbLogger(name=hparams__.exp_name, project=hparams__.proj_name, save_dir=hparams__.wandbsavepath)
+
+    logger1=wandb_logger
+    trainer = Trainer(max_epochs=hparams__.num_epochs,
+                      checkpoint_callback=checkpoint_callback,
+                      resume_from_checkpoint=hparams__.ckpt_path,
+                      logger=logger1,
+                      weights_summary=None,
+                      progress_bar_refresh_rate=hparams__.refresh_every,
+                      gpus= hparams__.num_gpus,
+                      accelerator='ddp' if hparams__.num_gpus>1 else None,
+                      num_sanity_val_steps=-1,
+                      benchmark=True,
+                      profiler="simple" if hparams__.num_gpus==1 else None)
+
+    trainer.fit(system)
+
+    # trainer = Trainer(max_epochs=hparams__.num_epochs,
+    #                   callbacks=[checkpoint_callback], ##change4 checkpoint_callback -> callbacks
+    #                   resume_from_checkpoint=hparams__.ckpt_path,
+    #                   logger=logger1,
+    #                   strategy='ddp',
+    #                 #   distributed_backend= 'ddp',
+    #                 #   weights_summary=None,     ##change5 zhushi
+    #                 #   progress_bar_refresh_rate=hparams__.refresh_every, ##change6 zhushi
+    #                   gpus= hparams__.num_gpus,
+    #                   accelerator='cuda',
+    #                   num_sanity_val_steps=-1,
+    #                   benchmark=True,
+    #                   profiler="simple" if hparams__.num_gpus==1 else None) #callbacks
+
+    # trainer.fit(system)
+    # wandb.finish()
+def main1(hparams):
     system = NeRFSystem(hparams)
     checkpoint_callback = \
         ModelCheckpoint(filepath=os.path.join(hparams.save_dir,

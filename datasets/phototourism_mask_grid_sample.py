@@ -225,8 +225,8 @@ class PhototourismDataset(Dataset):
     def __len__(self):
         if self.split == 'train':
             self.iterations = len(self.all_rays)//self.batch_size
-            return self.iterations
-            # return 1 
+            # return self.iterations
+            return 1 
         if self.split == 'test_train':
             return self.N_images_train
         if self.split == 'val':
@@ -243,7 +243,7 @@ class PhototourismDataset(Dataset):
             img = self.all_imgs[sample_ts]
             # grid
             w_samples, h_samples = torch.meshgrid([torch.linspace(0, 1-1/img_w, int(sqrt(self.batch_size))), \
-                                                    torch.linspace(0 , 1-1/img_h, int(sqrt(self.batch_size)))])
+                                                    torch.linspace(0 , 1-1/img_h, int(sqrt(self.batch_size)))], indexing = 'ij')
             if self.scale_anneal > 0:
                 min_scale_cur = min(max(self.min_scale, 1. * exp(-(global_val.current_epoch * self.iterations + idx)* self.scale_anneal)), 0.9)
             else:
@@ -305,7 +305,7 @@ class PhototourismDataset(Dataset):
             sample['rgb_idx'] = torch.LongTensor([i for i in range (0, (img_w*img_h))])
             
             w_samples, h_samples = torch.meshgrid([torch.linspace(0, 1-1/img_w, int(img_w)), \
-                                                    torch.linspace(0, 1-1/img_h, int(img_h))])
+                                                    torch.linspace(0, 1-1/img_h, int(img_h))], indexing = 'ij')
             uv_sample = torch.cat((h_samples.permute(1, 0).contiguous().view(-1,1), w_samples.permute(1, 0).contiguous().view(-1,1)), -1)
             sample['uv_sample'] = uv_sample
 
