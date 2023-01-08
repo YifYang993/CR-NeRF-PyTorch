@@ -34,7 +34,7 @@ class NeRF(nn.Module):
     def __init__(self, typ,
                  D=8, W=256, skips=[4],
                  in_channels_xyz=63, in_channels_dir=27,
-                 encode_appearance=False, in_channels_a=48,
+                 encode_appearance=False, in_channels_a=0,
                  encode_random=False):
 
         super().__init__()
@@ -46,9 +46,9 @@ class NeRF(nn.Module):
         self.in_channels_dir = in_channels_dir
 
         # self.encode_appearance = encode_appearance
-        self.encode_appearance = False if typ=='coarse' else encode_appearance
-        self.in_channels_a = in_channels_a if encode_appearance else 0
-        self.encode_random = False if typ=='coarse' else encode_random
+        self.encode_appearance = False 
+        self.in_channels_a =  0
+        self.encode_random = False 
 
         # xyz encoding layers
         for i in range(D):
@@ -67,22 +67,14 @@ class NeRF(nn.Module):
 
         # direction encoding layers
         self.dir_encoding = nn.Sequential(
-                        nn.Linear(W+in_channels_dir+self.in_channels_a, W//2), nn.ReLU(True))
+                        nn.Linear(W+in_channels_dir, W//2), nn.ReLU(True))
         self.static_rgb = nn.Sequential(nn.Linear(W//2, 3), nn.Sigmoid())
 
 
-    def forward(self, x, sigma_only=False, output_random=True):
+    def forward(self, x, sigma_only=False, output_random=False):
 
         if sigma_only:
             input_xyz = x
-        elif output_random:
-            input_xyz, input_dir, input_a, input_random_a = \
-                  torch.split(x, [self.in_channels_xyz,
-                                  self.in_channels_dir,
-                                  self.in_channels_a,
-                                  self.in_channels_a], dim=-1)
-            input_dir_a = torch.cat((input_dir, input_a), dim=-1)
-            input_dir_a_random = torch.cat((input_dir, input_random_a), dim=-1)
         else:
             input_xyz, input_dir_a = \
                 torch.split(x, [self.in_channels_xyz,

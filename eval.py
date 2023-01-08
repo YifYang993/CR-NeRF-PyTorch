@@ -144,33 +144,14 @@ if __name__ == "__main__":
     embedding_xyz = PosEmbedding(args.N_emb_xyz-1, args.N_emb_xyz)
     embedding_dir = PosEmbedding(args.N_emb_dir-1, args.N_emb_dir)
     embeddings = {'xyz': embedding_xyz, 'dir': embedding_dir}
-    if args.encode_a:
-        # enc_a
-        enc_a = E_attr(3, args.N_a).cuda()
-        load_ckpt(enc_a, args.ckpt_path, model_name='enc_a')
-        kwargs = {}
-        if args.dataset_name == 'blender':
-            with open(os.path.join(args.root_dir, f"transforms_train.json"), 'r') as f:
-                meta_train = json.load(f)
-            frame = meta_train['frames'][0]
-            image_path = os.path.join(args.root_dir, f"{frame['file_path']}.png")
-            img = Image.open(image_path)
-            img = img.resize(args.img_wh, Image.LANCZOS)
-            toTensor = T.ToTensor()
-            normalize = T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-            img = toTensor(img) # (4, h, w)
-            img = img[:3, :, :]*img[-1:, :, :] + (1-img[-1:, :, :]) # blend A to RGB (3, h, w)
-            whole_img = normalize(img).unsqueeze(0).cuda()
-            kwargs['a_embedded_from_img'] = enc_a(whole_img)
+    
 
     nerf_coarse = NeRF('coarse',
                         in_channels_xyz=6*args.N_emb_xyz+3,
                         in_channels_dir=6*args.N_emb_dir+3).cuda()
     nerf_fine = NeRF('fine',
                      in_channels_xyz=6*args.N_emb_xyz+3,
-                     in_channels_dir=6*args.N_emb_dir+3,
-                     encode_appearance=args.encode_a,
-                     in_channels_a=args.N_a).cuda()
+                     in_channels_dir=6*args.N_emb_dir+3).cuda()
 
     load_ckpt(nerf_coarse, args.ckpt_path, model_name='nerf_coarse')
     load_ckpt(nerf_fine, args.ckpt_path, model_name='nerf_fine')
@@ -326,9 +307,7 @@ if __name__ == "__main__":
         sample = dataset[i]
         rays = sample['rays']
         ts = sample['ts']
-        if args.split == 'test_test' and args.encode_a:
-            whole_img = sample['whole_img'].unsqueeze(0).cuda()
-            kwargs['a_embedded_from_img'] = enc_a(whole_img)
+
         results = batched_inference(models, embeddings, rays.cuda(), ts.cuda(),
                                     args.N_samples, args.N_importance, args.use_disp,
                                     args.chunk,

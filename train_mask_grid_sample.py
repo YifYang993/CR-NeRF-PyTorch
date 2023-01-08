@@ -27,7 +27,7 @@ from metrics import *
 # pytorch-lightning
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import LightningModule, Trainer
-from pytorch_lightning.loggers import TestTubeLogger
+
 
 from datasets import global_val
 
@@ -47,10 +47,6 @@ class NeRFSystem(LightningModule):
         self.embeddings = {'xyz': self.embedding_xyz,
                            'dir': self.embedding_dir}
 
-        if hparams.encode_a:
-            self.enc_a = E_attr(3, hparams.N_a)
-            self.models_to_train += [self.enc_a]
-            self.embedding_a_list = [None] * hparams.N_vocab
 
         self.nerf_coarse = NeRF('coarse',
                                 in_channels_xyz=6*hparams.N_emb_xyz+3,
@@ -61,18 +57,12 @@ class NeRFSystem(LightningModule):
             self.nerf_fine = NeRF('fine',
                                   in_channels_xyz=6*hparams.N_emb_xyz+3,
                                   in_channels_dir=6*hparams.N_emb_dir+3,
-                                  encode_appearance=hparams.encode_a,
-                                  in_channels_a=hparams.N_a,
-                                  encode_random=hparams.encode_random)
+                                  )
 
             self.models['fine'] = self.nerf_fine
         self.models_to_train += [self.models]
 
-        if hparams.use_mask:
-            self.implicit_mask = implicit_mask()
-            self.models_to_train += [self.implicit_mask]
-            self.embedding_view = torch.nn.Embedding(hparams.N_vocab, 128)
-            self.models_to_train += [self.embedding_view]
+
         
     def get_progress_bar_dict(self):
         items = super().get_progress_bar_dict()
@@ -82,21 +72,7 @@ class NeRFSystem(LightningModule):
     def forward(self, rays, ts, whole_img, W, H, rgb_idx, uv_sample, test_blender,val_mode=False):
         results = defaultdict(list)
         kwargs ={}
-        if self.hparams.encode_a:
-            if test_blender:
-                kwargs['a_embedded_from_img'] = self.embedding_a_list[0] if self.embedding_a_list[0] != None else self.enc_a(whole_img)
-            else:
-                # whole_img=(whole_img+1)/2
-                # print(torch.max(whole_img), torch.min(whole_img),"torch.max(whole_img), torch.min(whole_img) 89")
-                
-                kwargs['a_embedded_from_img'] = self.enc_a(whole_img)
-
-            if self.hparams.encode_random:
-                idexlist = [k for k,v in enumerate(self.embedding_a_list) if v != None]
-                if len(idexlist) == 0:
-                    kwargs['a_embedded_random'] = kwargs['a_embedded_from_img']
-                else:
-                    kwargs['a_embedded_random'] = self.embedding_a_list[random.choice(idexlist)]
+        
 
         """Do batched inference on rays using chunk."""
         B = rays.shape[0]
@@ -124,23 +100,7 @@ class NeRFSystem(LightningModule):
         for k, v in results.items():
             results[k] = torch.cat(v, 0)
 
-        if self.hparams.use_mask:
-            if test_blender:
-                results['out_mask'] = torch.zeros(results['rgb_fine'].shape[0], 1).to(results['rgb_fine'])
-            else:
-                uv_embedded = self.embedding_uv(uv_sample)
-                # print(uv_embedded.size(), uv_sample.size(), self.embedding_view(ts).size(),"uv_embedded.size(), uv_sample.size(), self.embedding_view(ts).size()")
-                # torch.Size([1024, 42]) torch.Size([1024, 2]) torch.Size([1024, 128])
-                results['out_mask'] = self.implicit_mask(torch.cat((self.embedding_view(ts), uv_embedded), dim=-1))
-
-        if self.hparams.encode_a:
-            results['a_embedded'] = kwargs['a_embedded_from_img']
-            if self.hparams.encode_random:
-                results['a_embedded_random'] = kwargs['a_embedded_random']
-                rec_img_random = results['rgb_fine_random'].view(1, H, W, 3).permute(0, 3, 1, 2) * 2 - 1
-                # print(torch.max(rec_img_random), torch.min(rec_img_random),"torch.max(rec_img_random), torch.min(rec_img_random) 136")
-                results['a_embedded_random_rec'] = self.enc_a(rec_img_random)
-                self.embedding_a_list[ts[0]] = kwargs['a_embedded_from_img'].clone().detach()
+       
 
         return results
 
@@ -362,35 +322,35 @@ def main(hparams__):
 
     # trainer.fit(system)
     # wandb.finish()
-def main1(hparams):
-    system = NeRFSystem(hparams)
-    checkpoint_callback = \
-        ModelCheckpoint(filepath=os.path.join(hparams.save_dir,
-                                              f'ckpts/{hparams.exp_name}'),
-                        # monitor='val/psnr',
-                        # mode='max',
-                        # save_top_k=1,
-                        save_last=True)
+# def main1(hparams):
+#     system = NeRFSystem(hparams)
+#     checkpoint_callback = \
+#         ModelCheckpoint(filepath=os.path.join(hparams.save_dir,
+#                                               f'ckpts/{hparams.exp_name}'),
+#                         # monitor='val/psnr',
+#                         # mode='max',
+#                         # save_top_k=1,
+#                         save_last=True)
 
-    logger = TestTubeLogger(save_dir=os.path.join(hparams.save_dir,"logs"),
-                            name=hparams.exp_name,
-                            debug=False,
-                            create_git_tag=False,
-                            log_graph=False)
+#     logger = TestTubeLogger(save_dir=os.path.join(hparams.save_dir,"logs"),
+#                             name=hparams.exp_name,
+#                             debug=False,
+#                             create_git_tag=False,
+#                             log_graph=False)
 
-    trainer = Trainer(max_epochs=hparams.num_epochs,
-                      checkpoint_callback=checkpoint_callback,
-                      resume_from_checkpoint=hparams.ckpt_path,
-                      logger=logger,
-                      weights_summary=None,
-                      progress_bar_refresh_rate=hparams.refresh_every,
-                      gpus= hparams.num_gpus,
-                      accelerator='ddp' if hparams.num_gpus>1 else None,
-                      num_sanity_val_steps=-1,
-                      benchmark=True,
-                      profiler="simple" if hparams.num_gpus==1 else None)
+#     trainer = Trainer(max_epochs=hparams.num_epochs,
+#                       checkpoint_callback=checkpoint_callback,
+#                       resume_from_checkpoint=hparams.ckpt_path,
+#                       logger=logger,
+#                       weights_summary=None,
+#                       progress_bar_refresh_rate=hparams.refresh_every,
+#                       gpus= hparams.num_gpus,
+#                       accelerator='ddp' if hparams.num_gpus>1 else None,
+#                       num_sanity_val_steps=-1,
+#                       benchmark=True,
+#                       profiler="simple" if hparams.num_gpus==1 else None)
 
-    trainer.fit(system)
+#     trainer.fit(system)
 
 from pytorch_lightning.utilities.distributed import rank_zero_only
 @rank_zero_only
