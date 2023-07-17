@@ -34,14 +34,14 @@ from datasets import global_val
 import random
 
 class NeRFSystem(LightningModule):
-    def __init__(self, hparams):
+    def __init__(self, hparams_):
         super().__init__()
-        self.hparams = hparams
-        self.loss = loss_dict['hanerf'](hparams, coef=1)
+        self.hparams_ = hparams_
+        self.loss = loss_dict['hanerf'](hparams_, coef=1)
 
         self.models_to_train = []
-        self.embedding_xyz = PosEmbedding(hparams.N_emb_xyz-1, hparams.N_emb_xyz)
-        self.embedding_dir = PosEmbedding(hparams.N_emb_dir-1, hparams.N_emb_dir)
+        self.embedding_xyz = PosEmbedding(hparams_.N_emb_xyz-1, hparams_.N_emb_xyz)
+        self.embedding_dir = PosEmbedding(hparams_.N_emb_dir-1, hparams_.N_emb_dir)
         self.embedding_uv = PosEmbedding(10-1, 10)
 
         self.embeddings = {'xyz': self.embedding_xyz,
@@ -49,14 +49,14 @@ class NeRFSystem(LightningModule):
 
 
         self.nerf_coarse = NeRF('coarse',
-                                in_channels_xyz=6*hparams.N_emb_xyz+3,
-                                in_channels_dir=6*hparams.N_emb_dir+3)
+                                in_channels_xyz=6*hparams_.N_emb_xyz+3,
+                                in_channels_dir=6*hparams_.N_emb_dir+3)
         self.models = {'coarse': self.nerf_coarse}
 
-        if hparams.N_importance > 0:
+        if hparams_.N_importance > 0:
             self.nerf_fine = NeRF('fine',
-                                  in_channels_xyz=6*hparams.N_emb_xyz+3,
-                                  in_channels_dir=6*hparams.N_emb_dir+3,
+                                  in_channels_xyz=6*hparams_.N_emb_xyz+3,
+                                  in_channels_dir=6*hparams_.N_emb_dir+3,
                                   )
 
             self.models['fine'] = self.nerf_fine
@@ -76,7 +76,7 @@ class NeRFSystem(LightningModule):
 
         """Do batched inference on rays using chunk."""
         B = rays.shape[0]
-        chunk_temp=self.hparams.chunk
+        chunk_temp=self.hparams_.chunk
         if val_mode==True:
             chunk_temp=2048
         for i in range(0, B, chunk_temp):
@@ -85,11 +85,11 @@ class NeRFSystem(LightningModule):
                             self.embeddings,
                             rays[i:i+chunk_temp],
                             ts[i:i+chunk_temp],
-                            self.hparams.N_samples,
-                            self.hparams.use_disp,
-                            self.hparams.perturb,
-                            self.hparams.noise_std,
-                            self.hparams.N_importance,
+                            self.hparams_.N_samples,
+                            self.hparams_.use_disp,
+                            self.hparams_.perturb,
+                            self.hparams_.noise_std,
+                            self.hparams_.N_importance,
                             chunk_temp, # chunk size is effective in val mode
                             self.train_dataset.white_back,
                             **kwargs)
@@ -105,36 +105,36 @@ class NeRFSystem(LightningModule):
         return results
 
     def setup(self, stage):
-        dataset = dataset_dict[self.hparams.dataset_name]
-        kwargs = {'root_dir': self.hparams.root_dir}
-        if self.hparams.dataset_name == 'phototourism':
-            kwargs['img_downscale'] = self.hparams.img_downscale
-            kwargs['val_num'] = self.hparams.num_gpus
-            kwargs['use_cache'] = self.hparams.use_cache
-            kwargs['batch_size'] = self.hparams.batch_size
-            kwargs['scale_anneal'] = self.hparams.scale_anneal
-            kwargs['min_scale'] = self.hparams.min_scale
-        elif self.hparams.dataset_name == 'blender':
-            kwargs['img_wh'] = tuple(self.hparams.img_wh)
-            kwargs['perturbation'] = self.hparams.data_perturb
-            kwargs['batch_size'] = self.hparams.batch_size
-            kwargs['scale_anneal'] = self.hparams.scale_anneal
-            kwargs['min_scale'] = self.hparams.min_scale
-            if self.hparams.useNeuralRenderer:
-                kwargs['NeuralRenderer_downsampleto'] = (self.hparams.NRDS, self.hparams.NRDS)
+        dataset = dataset_dict[self.hparams_.dataset_name]
+        kwargs = {'root_dir': self.hparams_.root_dir}
+        if self.hparams_.dataset_name == 'phototourism':
+            kwargs['img_downscale'] = self.hparams_.img_downscale
+            kwargs['val_num'] = self.hparams_.num_gpus
+            kwargs['use_cache'] = self.hparams_.use_cache
+            kwargs['batch_size'] = self.hparams_.batch_size
+            kwargs['scale_anneal'] = self.hparams_.scale_anneal
+            kwargs['min_scale'] = self.hparams_.min_scale
+        elif self.hparams_.dataset_name == 'blender':
+            kwargs['img_wh'] = tuple(self.hparams_.img_wh)
+            kwargs['perturbation'] = self.hparams_.data_perturb
+            kwargs['batch_size'] = self.hparams_.batch_size
+            kwargs['scale_anneal'] = self.hparams_.scale_anneal
+            kwargs['min_scale'] = self.hparams_.min_scale
+            if self.hparams_.useNeuralRenderer:
+                kwargs['NeuralRenderer_downsampleto'] = (self.hparams_.NRDS, self.hparams_.NRDS)
         self.train_dataset = dataset(split='train', **kwargs)
         self.val_dataset = dataset(split='val', **kwargs)
 
     def configure_optimizers(self):
-        self.optimizer = get_optimizer(self.hparams, self.models_to_train)
-        scheduler = get_scheduler(self.hparams, self.optimizer)
+        self.optimizer = get_optimizer(self.hparams_, self.models_to_train)
+        scheduler = get_scheduler(self.hparams_, self.optimizer)
         return [self.optimizer], [scheduler]
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
                           shuffle=False,
                           num_workers=4,
-                          batch_size=1, # self.hparams.batch_size a time
+                          batch_size=1, # self.hparams_.batch_size a time
                           pin_memory=True)
 
     def val_dataloader(self):
@@ -148,7 +148,7 @@ class NeRFSystem(LightningModule):
         rays, ts = batch['rays'].squeeze(), batch['ts'].squeeze()
         rgbs = batch['rgbs'].squeeze()
         uv_sample = batch['uv_sample'].squeeze()
-        if self.hparams.encode_a or self.hparams.use_mask:
+        if self.hparams_.encode_a or self.hparams_.use_mask:
             whole_img = batch['whole_img']
             rgb_idx = batch['rgb_idx']
         else:
@@ -159,7 +159,7 @@ class NeRFSystem(LightningModule):
 
         test_blender = False
         results = self(rays, ts, whole_img, W, H, rgb_idx, uv_sample, test_blender)
-        loss_d, AnnealingWeight = self.loss(results, rgbs, self.hparams, self.global_step)
+        loss_d, AnnealingWeight = self.loss(results, rgbs, self.hparams_, self.global_step)
         loss = sum(l for l in loss_d.values())
 
         with torch.no_grad():
@@ -178,7 +178,7 @@ class NeRFSystem(LightningModule):
             img = results[f'rgb_{typ}'].detach().view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
             img_gt = rgbs.detach().view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
             depth = visualize_depth(results[f'depth_{typ}'].detach().view(H, W)) # (3, H, W)
-            if self.hparams.use_mask:
+            if self.hparams_.use_mask:
                 mask = results['out_mask'].detach().view(H, W, 1).permute(2, 0, 1).repeat(3, 1, 1).cpu() # (3, H, W)
                 if 'rgb_fine_random' in results:
                     img_random = results[f'rgb_fine_random'].detach().view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
@@ -198,20 +198,20 @@ class NeRFSystem(LightningModule):
         return loss
 
     def validation_step(self, batch, batch_nb):
-        if self.current_epoch!=self.hparams.num_epochs -1:
+        if self.current_epoch!=self.hparams_.num_epochs -1:
             return 0
         rays, ts = batch['rays'].squeeze(), batch['ts'].squeeze()
         rgbs =  batch['rgbs'].squeeze()
-        if self.hparams.dataset_name == 'phototourism':
+        if self.hparams_.dataset_name == 'phototourism':
             uv_sample = batch['uv_sample'].squeeze()
             WH = batch['img_wh']
             W, H = WH[0, 0].item(), WH[0, 1].item()
         else:
-            W, H = self.hparams.img_wh
+            W, H = self.hparams_.img_wh
             uv_sample = None
 
-        if self.hparams.encode_a or self.hparams.use_mask :#or self.hparams.deocclusion:
-            if self.hparams.dataset_name == 'phototourism':
+        if self.hparams_.encode_a or self.hparams_.use_mask :#or self.hparams_.deocclusion:
+            if self.hparams_.dataset_name == 'phototourism':
                 whole_img = batch['whole_img']
             else:
                 whole_img = rgbs.view(1, H, W, 3).permute(0, 3, 1, 2) * 2 - 1
@@ -220,7 +220,7 @@ class NeRFSystem(LightningModule):
             whole_img = None
             rgb_idx = None
 
-        test_blender = (self.hparams.dataset_name == 'blender')
+        test_blender = (self.hparams_.dataset_name == 'blender')
         results = self(rays, ts, whole_img, W, H, rgb_idx, uv_sample, test_blender, val_mode=True)
         loss_d, AnnealingWeight = self.loss(results, rgbs, self.hparams, self.global_step)
         loss = sum(l for l in loss_d.values())
@@ -233,7 +233,7 @@ class NeRFSystem(LightningModule):
         img_gt = rgbs.view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
         if batch_nb == 0:
             depth = visualize_depth(results[f'depth_{typ}'].view(H, W)) # (3, H, W)
-            if self.hparams.use_mask:
+            if self.hparams_.use_mask:
                 mask = results['out_mask'].detach().view(H, W, 1).permute(2, 0, 1).repeat(3, 1, 1).cpu() # (3, H, W)
                 if 'rgb_fine_random' in results:
                     img_random = results[f'rgb_fine_random'].detach().view(H, W, 3).permute(2, 0, 1).cpu() # (3, H, W)
@@ -258,7 +258,7 @@ class NeRFSystem(LightningModule):
         return log
 
     def validation_epoch_end(self, outputs):
-        if self.current_epoch!=self.hparams.num_epochs -1:
+        if self.current_epoch!=self.hparams_.num_epochs -1:
             return 0
         if len(outputs) == 1:
             global_val.current_epoch = self.current_epoch
@@ -271,7 +271,7 @@ class NeRFSystem(LightningModule):
         self.log('val/psnr', mean_psnr, prog_bar=True)
         self.log('val/ssim', mean_ssim, prog_bar=True)
 
-        if self.hparams.use_mask:
+        if self.hparams_.use_mask:
             self.log('val/c_l', torch.stack([x['c_l'] for x in outputs]).mean())
             self.log('val/f_l', torch.stack([x['f_l'] for x in outputs]).mean())
             self.log('val/r_ms', torch.stack([x['r_ms'] for x in outputs]).mean())

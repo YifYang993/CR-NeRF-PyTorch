@@ -1,6 +1,7 @@
 import torch
-from kornia.metrics import ssim as dssim
+# from kornia.metrics import ssim as dssim
 
+from kornia.losses import ssim as dssim
 def mse(image_pred, image_gt, valid_mask=None, reduction='mean'):
     value = (image_pred-image_gt)**2
     if valid_mask is not None:
