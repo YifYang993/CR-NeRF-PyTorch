@@ -15,7 +15,7 @@ from PIL import Image
 from torchvision import transforms as T
 
 import lpips
-lpips_alex = lpips.LPIPS(net='alex') # best forward scores
+lpips_alex = lpips.LPIPS(net='alex') 
 
 torch.backends.cudnn.benchmark = True
 
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     else:
         kwargs['img_downscale'] = args.img_downscale
         kwargs['use_cache'] = args.use_cache
-    dataset = dataset_dict[args.dataset_name](**kwargs)
+    dataset = dataset_dict[args.dataset_name](args=args,**kwargs)
     scene = os.path.basename(args.root_dir.strip('/'))
 
     imgs, psnrs, ssims, lpips_alexs, lpips_vggs, maes, mses = [], [], [], [], [], [], []
@@ -87,25 +87,20 @@ if __name__ == "__main__":
         rgbs = sample['rgbs']
         img_gt = rgbs.view(h, w, 3)
         if args.dataset_name == 'phototourism':
-            # psnrs += [metrics.psnr(img_gt[:,w//2:,:], img_pred.permute(1, 2, 0)[:,w//2:,:]).item()]
             psnrs += [metrics.psnr(img_gt[:,w//2:,:], img_pred.permute(1, 2, 0)[:,w//2:,:])]
-            # ssims += [metrics.ssim(img_gt[:,w//2:,:].permute(2, 0, 1)[None,...], img_pred[:, :, w//2:][None,...]).item()]
             ssims += [metrics.ssim(img_gt[:,w//2:,:].permute(2, 0, 1)[None,...], img_pred[:, :, w//2:][None,...])]
-            # lpips_alexs += [lpips_alex((img_gt[:,w//2:,:].permute(2, 0, 1)[None,...]*2-1), normalize_img_pre[...,w//2:]).item()]
             lpips_alexs += [lpips_alex((img_gt[:,w//2:,:].permute(2, 0, 1)[None,...]*2-1), normalize_img_pre[...,w//2:])]
-            # mses += [((img_gt[:,w//2:,:] - img_pred.permute(1, 2, 0)[:,w//2:,:])**2).mean().item()]
             mses += [((img_gt[:,w//2:,:] - img_pred.permute(1, 2, 0)[:,w//2:,:])**2).mean()]
         else:
-            psnrs += [metrics.psnr(img_gt, img_pred.permute(1, 2, 0)).item()]
-            ssims += [metrics.ssim(img_gt.permute(2, 0, 1)[None,...], img_pred[None,...]).item()]
-            lpips_alexs += [lpips_alex((img_gt.permute(2, 0, 1)[None,...]*2-1), normalize_img_pre).item()]
-            mses += [((img_gt - img_pred.permute(1, 2, 0))**2).mean().item()]
+            psnrs += [metrics.psnr(img_gt, img_pred.permute(1, 2, 0))]
+            ssims += [metrics.ssim(img_gt.permute(2, 0, 1)[None,...], img_pred[None,...])]
+            lpips_alexs += [lpips_alex((img_gt.permute(2, 0, 1)[None,...]*2-1), normalize_img_pre)]
+            mses += [((img_gt - img_pred.permute(1, 2, 0))**2).mean()]
 
     if args.dataset_name == 'blender' or \
       (args.dataset_name == 'phototourism' and args.split == 'test'):
         imageio.mimsave(os.path.join(dir_name, f'{args.scene_name}_30.{args.video_format}'),
                         imgs, fps=30)
-    
     mean_psnr = torch.mean(torch.stack(psnrs)).item()
     mean_ssim = torch.mean(torch.stack([x.mean() for x in ssims])).item()
     mean_lpips_alex =torch.mean(torch.stack(lpips_alexs)).item()

@@ -7,18 +7,17 @@ import pandas as pd
 import pickle
 from PIL import Image
 from torchvision import transforms as T
-
 from .ray_utils import *
 from .colmap_utils import \
     read_cameras_binary, read_images_binary, read_points3d_binary
-
+from . import global_val
 from math import sqrt, exp
 import random
 
-from . import global_val
+
 
 class PhototourismDataset(Dataset):
-    def __init__(self, root_dir, split='train', img_downscale=1, val_num=1, use_cache=False, batch_size=1024, scale_anneal=-1, min_scale=0.25):
+    def __init__(self, args, root_dir, split='train', img_downscale=1, val_num=1, use_cache=False, batch_size=1024, scale_anneal=-1, min_scale=0.25):
         """
         img_downscale: how much scale to downsample the training images.
                        The original image sizes are around 500~100, so value of 1 or 2
@@ -53,7 +52,7 @@ class PhototourismDataset(Dataset):
         self.min_scale = min_scale
 
         self.batch_size = batch_size
-
+        self.args=args
     def read_meta(self):
         # read all files in the tsv first (split to train and test later)
         tsv = glob.glob(os.path.join(self.root_dir, '*.tsv'))[0]
@@ -156,7 +155,6 @@ class PhototourismDataset(Dataset):
                                     if self.files.loc[i, 'split']=='test']
         self.N_images_train = len(self.img_ids_train)
         self.N_images_test = len(self.img_ids_test)
-
         if self.split == 'train': # create buffer of all rays and rgb data
             if self.use_cache:
                 all_rays = np.load(os.path.join(self.root_dir,
@@ -165,13 +163,15 @@ class PhototourismDataset(Dataset):
                 all_rgbs = np.load(os.path.join(self.root_dir,
                                                 f'cache/rgbs{self.img_downscale}.npy'))
                 self.all_rgbs = torch.from_numpy(all_rgbs)
-                # with open(os.path.join(self.root_dir, f'cache/all_imgs{self.img_downscale}.pkl'), 'rb') as f:
-                #     self.all_imgs = pickle.load(f)
                 with open(os.path.join(self.root_dir, f'cache/all_imgs{8}.pkl'), 'rb') as f:
                     self.all_imgs = pickle.load(f)
                 all_imgs_wh = np.load(os.path.join(self.root_dir,
                                                 f'cache/all_imgs_wh{self.img_downscale}.npy'))
-                self.all_imgs_wh = torch.from_numpy(all_imgs_wh)
+                self.all_imgs_wh = torch.from_numpy(all_imgs_wh) 
+
+            
+                
+
             else:
                 self.all_rays = []
                 self.all_rgbs = []
@@ -184,19 +184,19 @@ class PhototourismDataset(Dataset):
                                                   self.image_paths[id_])).convert('RGB')
                     img_w, img_h = img.size
                     if self.img_downscale > 1:
+                        w=img_w
+                        h=img_h
                         img_w = img_w//self.img_downscale
                         img_h = img_h//self.img_downscale
                         img_rs = img.resize((img_w, img_h), Image.LANCZOS)
                     img_rs = self.transform(img_rs) # (3, h, w)
 
-                    img_8 = img.resize((img_w//self.img_downscale_appearance, img_h//self.img_downscale_appearance), Image.LANCZOS)
-                    img_8 = self.transform(img_8) # (3, h, w)
+                    img_8 = img.resize((w//self.img_downscale_appearance, h//self.img_downscale_appearance), Image.LANCZOS)
+                    img_8 = self.transform(img_8)
                     self.all_imgs += [self.normalize(img_8)]
-                    # print(torch.min(self.all_imgs[-1]), torch.max(self.all_imgs[-1]),"torch.min(self.all_imgs[-1]), torch.max(self.all_imgs[-1])")
                     self.all_imgs_wh += [torch.Tensor([img_w, img_h]).unsqueeze(0)]
                     img_rs = img_rs.view(3, -1).permute(1, 0) # (h*w, 3) RGB
                     self.all_rgbs += [img_rs]
-                    
                     directions = get_ray_directions(img_h, img_w, self.Ks[id_])
                     rays_o, rays_d = get_rays(directions, c2w)
                     rays_t = id_ * torch.ones(len(rays_o), 1)
@@ -210,6 +210,7 @@ class PhototourismDataset(Dataset):
                 self.all_rays = torch.cat(self.all_rays, 0) # ((N_images-1)*h*w, 8)
                 self.all_rgbs = torch.cat(self.all_rgbs, 0) # ((N_images-1)*h*w, 3)
                 self.all_imgs_wh = torch.cat(self.all_imgs_wh, 0) # ((N_images-1)*h*w, 3)
+
         
         elif self.split in ['val', 'test_train']: # use the first image as val image (also in train)
             self.val_id = self.img_ids_train[0]
@@ -225,8 +226,10 @@ class PhototourismDataset(Dataset):
     def __len__(self):
         if self.split == 'train':
             self.iterations = len(self.all_rays)//self.batch_size
-            return self.iterations
-            # return 1 
+            if  self.args.testit:
+                return 1 
+            else:return self.iterations
+            
         if self.split == 'test_train':
             return self.N_images_train
         if self.split == 'val':
@@ -243,8 +246,8 @@ class PhototourismDataset(Dataset):
             img = self.all_imgs[sample_ts]
             # grid
             w_samples, h_samples = torch.meshgrid([torch.linspace(0, 1-1/img_w, int(sqrt(self.batch_size))), \
-                                                    torch.linspace(0 , 1-1/img_h, int(sqrt(self.batch_size)))])
-            if self.scale_anneal > 0:
+                                                    torch.linspace(0 , 1-1/img_h, int(sqrt(self.batch_size)))],indexing='ij')
+            if self.scale_anneal > 0:###-1
                 min_scale_cur = min(max(self.min_scale, 1. * exp(-(global_val.current_epoch * self.iterations + idx)* self.scale_anneal)), 0.9)
             else:
                 min_scale_cur = self.min_scale
@@ -255,7 +258,9 @@ class PhototourismDataset(Dataset):
             w_sb = w_samples * scale + w_offset
             h = (h_sb * img_h).floor()
             w = (w_sb * img_w).floor()
+
             img_sample_points = (w + h * img_w).permute(1, 0).contiguous().view(-1).long()
+
             uv_sample = torch.cat((h_sb.permute(1, 0).contiguous().view(-1,1), w_sb.permute(1, 0).contiguous().view(-1,1)), -1)
 
             rgb_sample_points = (img_sample_points + (self.all_imgs_wh[:sample_ts, 0]*self.all_imgs_wh[:sample_ts, 1]).sum()).long()
@@ -305,7 +310,7 @@ class PhototourismDataset(Dataset):
             sample['rgb_idx'] = torch.LongTensor([i for i in range (0, (img_w*img_h))])
             
             w_samples, h_samples = torch.meshgrid([torch.linspace(0, 1-1/img_w, int(img_w)), \
-                                                    torch.linspace(0, 1-1/img_h, int(img_h))])
+                                                    torch.linspace(0, 1-1/img_h, int(img_h))],indexing='ij')
             uv_sample = torch.cat((h_samples.permute(1, 0).contiguous().view(-1,1), w_samples.permute(1, 0).contiguous().view(-1,1)), -1)
             sample['uv_sample'] = uv_sample
 
@@ -327,5 +332,24 @@ class PhototourismDataset(Dataset):
             sample['rays'] = rays
             sample['ts'] = self.test_appearance_idx * torch.ones(len(rays), dtype=torch.long)
             sample['img_wh'] = torch.LongTensor([self.test_img_w, self.test_img_h])
-
         return sample
+
+
+if __name__=='__main__':
+    class args():
+        def __init__(self) -> None:
+            self.testit=False
+    args=args()
+    from torch.utils.data import DataLoader
+    root_dir="/mnt/cephfs/dataset/NVS/nerfInWild/brandenburg_gate/"
+    img_downscale=2
+    os.makedirs(os.path.join(root_dir, 'cache_debug'), exist_ok=True)
+    dataset = PhototourismDataset(args,root_dir=root_dir, split='train', img_downscale=img_downscale)
+
+    D=DataLoader(dataset,
+                          shuffle=False,
+                          num_workers=4,
+                          batch_size=1, # self.hparams.batch_size a time
+                          pin_memory=True)
+    for index,data in enumerate(D):
+        print(IndexError)

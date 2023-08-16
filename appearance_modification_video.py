@@ -5,8 +5,11 @@ from collections import defaultdict
 from tqdm import tqdm
 import imageio
 from argparse import ArgumentParser
-
-from models.rendering import render_rays
+from einops import rearrange
+from models.rendering import render_rays_cross_ray
+from models.linearStyleTransfer import encoder_sameoutputsize 
+from models.linearStyleTransfer import style_net
+from train_mask_grid_sample import get_model
 from models.networks import *
 from models.nerf import *
 
@@ -32,7 +35,11 @@ def get_opts():
     parser.add_argument('--save_dir', type=str, default="./",
                         help='path to save')
 
-    # original NeRF parameters
+    # original NeRF parameters  decoder_num_res_blocks=1 
+    parser.add_argument('--decoder_num_res_blocks', type=int, default=1,
+                        help='number of decoder_num_res_blocks')
+    parser.add_argument('--nerf_out_dim', type=int, default=64,
+                        help='number of output dimension in nerf')
     parser.add_argument('--N_emb_xyz', type=int, default=15,
                         help='number of xyz embedding frequencies')
     parser.add_argument('--N_emb_dir', type=int, default=4,
@@ -46,8 +53,14 @@ def get_opts():
     parser.add_argument('--chunk', type=int, default=16384,
                         help='chunk size to split the input to avoid OOM')
 
-    # Ha-NeRF parameters
-    parser.add_argument('--encode_a', default=True, action="store_true",
+    # CR-NeRF parameters
+    parser.add_argument('--pertubeCord', default=False, action="store_true",
+                        help='whether to encode appearance')
+    parser.add_argument('--encode_a', default=False, action="store_true",
+                        help='whether to encode appearance')
+    parser.add_argument('--encode_c', default=False, action="store_true",
+                        help='whether to encode content')
+    parser.add_argument('--encode_random', default=False, action="store_true",
                         help='whether to encode appearance')
     parser.add_argument('--N_a', type=int, default=48,
                         help='number of embeddings for appearance')
@@ -67,7 +80,7 @@ def batched_inference(models, embeddings,
 
     for i in range(0, B, chunk):
         rendered_ray_chunks = \
-            render_rays(models,
+            render_rays_cross_ray(models,
                         embeddings,
                         rays[i:i+chunk],
                         None,
@@ -82,7 +95,7 @@ def batched_inference(models, embeddings,
                         **kwargs)
 
         for k, v in rendered_ray_chunks.items():
-            results[k] += [v.cpu()]
+            results[k] += [v]
 
     for k, v in results.items():
         results[k] = torch.cat(v, 0)
@@ -183,26 +196,18 @@ if __name__ == "__main__":
     embedding_dir = PosEmbedding(args.N_emb_dir-1, args.N_emb_dir)
     embeddings = {'xyz': embedding_xyz, 'dir': embedding_dir}
  
-    # enc_a
-    enc_a = E_attr(3, args.N_a).cuda()
+    enc_a = encoder_sameoutputsize(out_channel=args.nerf_out_dim).cuda()
     load_ckpt(enc_a, args.ckpt_path, model_name='enc_a')
-    nerf_coarse = NeRF('coarse',
-                        in_channels_xyz=6*args.N_emb_xyz+3,
-                        in_channels_dir=6*args.N_emb_dir+3).cuda()
-    models = {'coarse': nerf_coarse}
-    nerf_fine = NeRF('fine',
-                     in_channels_xyz=6*args.N_emb_xyz+3,
-                     in_channels_dir=6*args.N_emb_dir+3,
-                     encode_appearance=args.encode_a,
-                     in_channels_a=args.N_a).cuda()
-
+    models=get_model(args)
+    nerf_coarse=models['coarse']
+    nerf_fine=models['fine']
+    decoder=models['decoder']
     load_ckpt(nerf_coarse, args.ckpt_path, model_name='nerf_coarse')
     load_ckpt(nerf_fine, args.ckpt_path, model_name='nerf_fine')
-
-    models = {'coarse': nerf_coarse, 'fine': nerf_fine}
+    load_ckpt(decoder, args.ckpt_path, model_name='decoder')
 
     imgs = []
-    dir_name = os.path.join(args.save_dir, f'hallucination/{args.scene_name}')
+    dir_name = os.path.join(args.save_dir, f'appearance_modification/{args.scene_name}')
     os.makedirs(dir_name, exist_ok=True)
 
     define_camera(dataset)
@@ -211,9 +216,10 @@ if __name__ == "__main__":
     elif dir_name.split('_')[-1] == 'fountain':
         define_poses_trevi_fountain(dataset)
     else:
-        input("wrong")
+        input("Pose not defined")
 
     kwargs = {}
+    kwargs['args']=args
 
     files= os.listdir(args.example_image)
     for file_name in tqdm(files):
@@ -224,11 +230,12 @@ if __name__ == "__main__":
         img_w, img_h = org_img.size
         img_w = img_w//img_downscale
         img_h = img_h//img_downscale
-        img = org_img.resize((img_w, img_h), Image.LANCZOS)
+        img = org_img.resize((img_w, img_h), resample=Image.LANCZOS)
         toTensor = T.ToTensor()
         normalize = T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         img = toTensor(img) # (3, h, w)
         whole_img = normalize(img).unsqueeze(0).cuda()
+        whole_img=(whole_img+1)/2
         kwargs['a_embedded_from_img'] = enc_a(whole_img)
 
         imgs = []
@@ -241,7 +248,14 @@ if __name__ == "__main__":
                                         dataset.white_back,
                                         **kwargs)
             w, h = sample['img_wh']
-            img_pred = np.clip(results['rgb_fine'].view(h, w, 3).cpu().numpy(), 0, 1)
+            feature=results['feature_fine'] #torch.Size([699008, 4])
+            lastdim=feature.size(-1)
+            feature = rearrange(feature, 'n1 n3 -> n3 n1', n3=lastdim)
+            feature = rearrange(feature, ' n3 (h w) ->  1 n3 h w',  h=int(h), w=int(w),n3=lastdim)  ##torch.Size([1, 64, 340, 514])
+            rgbs_pred=models['decoder'](feature, kwargs['a_embedded_from_img'])
+            rgbs_pred=rearrange(rgbs_pred, ' 1 n1 h w ->  (h w) n1',  h=int(h), w=int(w),n1=3)
+            results['rgb_fine']=rgbs_pred.cpu()
+            img_pred = np.clip(results['rgb_fine'].view(h, w, 3).cpu().detach().numpy(), 0, 1)
             img_pred_ = (img_pred*255).astype(np.uint8)
             imgs += [img_pred_]
 

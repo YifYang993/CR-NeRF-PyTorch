@@ -6,76 +6,24 @@ from tqdm import tqdm
 import imageio
 from argparse import ArgumentParser
 
-from models.rendering import render_rays
+from models.rendering import render_rays_cross_ray
 from models.nerf import *
-
+from models.nerf_decoder_stylenerf import get_renderer
 from utils import load_ckpt
 import metrics
-
+from einops import rearrange
 from datasets import dataset_dict
 from datasets.depth_utils import *
-
+from models.linearStyleTransfer import encoder3, encoder_sameoutputsize
 from models.networks import E_attr
 from math import sqrt
 import math
 import json
 from PIL import Image
 from torchvision import transforms as T
-
+from opt import get_opts
+from train_mask_grid_sample import get_model
 torch.backends.cudnn.benchmark = True
-
-def get_opts():
-    parser = ArgumentParser()
-    parser.add_argument('--root_dir', type=str,
-                        default='/home/cy/PNW/datasets/nerf_synthetic/lego',
-                        help='root directory of dataset')
-    parser.add_argument('--dataset_name', type=str, default='blender',
-                        choices=['blender', 'phototourism'],
-                        help='which dataset to validate')
-    parser.add_argument('--scene_name', type=str, default='test',
-                        help='scene name, used as output folder name')
-    parser.add_argument('--split', type=str, default='val',
-                        choices=['val', 'test', 'test_train', 'test_test'])
-    parser.add_argument('--img_wh', nargs="+", type=int, default=[800, 800],
-                        help='resolution (img_w, img_h) of the image')
-    # for phototourism
-    parser.add_argument('--img_downscale', type=int, default=1,
-                        help='how much to downscale the images for phototourism dataset')
-    parser.add_argument('--use_cache', default=False, action="store_true",
-                        help='whether to use ray cache (make sure img_downscale is the same)')
-
-    parser.add_argument('--N_emb_xyz', type=int, default=10,
-                        help='number of xyz embedding frequencies')
-    parser.add_argument('--N_emb_dir', type=int, default=4,
-                        help='number of direction embedding frequencies')
-    parser.add_argument('--N_samples', type=int, default=64,
-                        help='number of coarse samples')
-    parser.add_argument('--N_importance', type=int, default=128,
-                        help='number of additional fine samples')
-    parser.add_argument('--use_disp', default=False, action="store_true",
-                        help='use disparity depth sampling')
-    parser.add_argument('--N_vocab', type=int, default=100,
-                        help='''number of vocabulary (number of images) 
-                                in the dataset for nn.Embedding''')
-    parser.add_argument('--encode_a', default=False, action="store_true",
-                        help='whether to encode appearance')
-    parser.add_argument('--N_a', type=int, default=48,
-                        help='number of embeddings for appearance')
-
-    parser.add_argument('--chunk', type=int, default=32*1024*4,
-                        help='chunk size to split the input to avoid OOM')
-
-    parser.add_argument('--ckpt_path', type=str, required=True,
-                        help='pretrained checkpoint path to load')
-
-    parser.add_argument('--video_format', type=str, default='gif',
-                        choices=['gif', 'mp4'],
-                        help='video format, gif or mp4')
-    
-    parser.add_argument('--save_dir', type=str, default="./",
-                        help='pretrained checkpoint path to load')
-
-    return parser.parse_args()
 
 
 @torch.no_grad()
@@ -87,10 +35,9 @@ def batched_inference(models, embeddings,
     """Do batched inference on rays using chunk."""
     B = rays.shape[0]
     results = defaultdict(list)
-
     for i in range(0, B, chunk):
         rendered_ray_chunks = \
-            render_rays(models,
+            render_rays_cross_ray(models,
                         embeddings,
                         rays[i:i+chunk],
                         ts[i:i+chunk] if ts is not None else None,
@@ -105,7 +52,7 @@ def batched_inference(models, embeddings,
                         **kwargs)
 
         for k, v in rendered_ray_chunks.items():
-            results[k] += [v.cpu()]
+            results[k] += [v]
 
     for k, v in results.items():
         results[k] = torch.cat(v, 0)
@@ -138,25 +85,41 @@ if __name__ == "__main__":
     else:
         kwargs['img_downscale'] = args.img_downscale
         kwargs['use_cache'] = args.use_cache
-    dataset = dataset_dict[args.dataset_name](**kwargs)
+    dataset = dataset_dict[args.dataset_name](args=args,**kwargs)
     scene = os.path.basename(args.root_dir.strip('/'))
 
     embedding_xyz = PosEmbedding(args.N_emb_xyz-1, args.N_emb_xyz)
     embedding_dir = PosEmbedding(args.N_emb_dir-1, args.N_emb_dir)
     embeddings = {'xyz': embedding_xyz, 'dir': embedding_dir}
-    
+    if args.encode_a:
+        # enc_a
+        enc_a = encoder_sameoutputsize(out_channel=args.nerf_out_dim).cuda()
+        load_ckpt(enc_a, args.ckpt_path, model_name='enc_a')
+        kwargs = {}
+        if args.dataset_name == 'blender':
+            with open(os.path.join(args.root_dir, f"transforms_train.json"), 'r') as f:
+                meta_train = json.load(f)
+            frame = meta_train['frames'][0]
+            image_path = os.path.join(args.root_dir, f"{frame['file_path']}.png")
+            img = Image.open(image_path)
+            img = img.resize(args.img_wh, Image.LANCZOS)
+            toTensor = T.ToTensor()
+            normalize = T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            img = toTensor(img) # (4, h, w)
+            img = img[:3, :, :]*img[-1:, :, :] + (1-img[-1:, :, :]) # blend A to RGB (3, h, w)
+            whole_img = normalize(img).unsqueeze(0).cuda()
+            kwargs['a_embedded_from_img'] = enc_a(whole_img)
+ 
 
-    nerf_coarse = NeRF('coarse',
-                        in_channels_xyz=6*args.N_emb_xyz+3,
-                        in_channels_dir=6*args.N_emb_dir+3).cuda()
-    nerf_fine = NeRF('fine',
-                     in_channels_xyz=6*args.N_emb_xyz+3,
-                     in_channels_dir=6*args.N_emb_dir+3).cuda()
-
+   
+    models=get_model(args)
+    nerf_coarse=models['coarse']
+    nerf_fine=models['fine']
+    decoder=models['decoder']
     load_ckpt(nerf_coarse, args.ckpt_path, model_name='nerf_coarse')
     load_ckpt(nerf_fine, args.ckpt_path, model_name='nerf_fine')
+    load_ckpt(decoder, args.ckpt_path, model_name='decoder')
 
-    models = {'coarse': nerf_coarse, 'fine': nerf_fine}
 
     imgs, psnrs, ssims = [], [], []
     dir_name = os.path.join(args.save_dir, f'results/{args.dataset_name}/{args.scene_name}')
@@ -164,6 +127,7 @@ if __name__ == "__main__":
 
     # enc_a
     # define testing poses and appearance index for phototourism
+    kwargs['args']=args
     if args.dataset_name == 'phototourism' and args.split == 'test':
         # define testing camera intrinsics (hard-coded, feel free to change)
         dataset.test_img_w, dataset.test_img_h = args.img_wh
@@ -185,6 +149,7 @@ if __name__ == "__main__":
             img = toTensor(img) # (3, h, w)
             whole_img = normalize(img).unsqueeze(0).cuda()
             kwargs['a_embedded_from_img'] = enc_a(whole_img)
+            
 
             dataset.test_appearance_idx = 314 # 85572957_6053497857.jpg
             N_frames = 30*8
@@ -307,19 +272,28 @@ if __name__ == "__main__":
         sample = dataset[i]
         rays = sample['rays']
         ts = sample['ts']
-
+        if args.split == 'test_test' and args.encode_a:
+            whole_img = sample['whole_img'].unsqueeze(0).cuda()
+            whole_img=(whole_img+1)/2
+            kwargs['a_embedded_from_img'] = enc_a(whole_img)
         results = batched_inference(models, embeddings, rays.cuda(), ts.cuda(),
                                     args.N_samples, args.N_importance, args.use_disp,
                                     args.chunk,
                                     dataset.white_back,
                                     **kwargs)
-
         if args.dataset_name == 'blender':
             w, h = args.img_wh
         else:
             w, h = sample['img_wh']
-        
-        img_pred = np.clip(results['rgb_fine'].view(h, w, 3).cpu().numpy(), 0, 1)
+        feature=results['feature_fine'] #torch.Size([699008, 4])
+        print("using fine feature")
+        lastdim=feature.size(-1)
+        feature = rearrange(feature, 'n1 n3 -> n3 n1', n3=lastdim)
+        feature = rearrange(feature, ' n3 (h w) ->  1 n3 h w',  h=int(h), w=int(w),n3=lastdim)  ##torch.Size([1, 64, 340, 514])
+        rgbs_pred=models['decoder'](feature, kwargs['a_embedded_from_img'])
+        rgbs_pred=rearrange(rgbs_pred, ' 1 n1 h w ->  (h w) n1',  h=int(h), w=int(w),n1=3)
+        results['rgb_fine']=rgbs_pred.cpu()
+        img_pred = np.clip(results['rgb_fine'].view(h, w, 3).detach().numpy(), 0, 1)
         img_pred_ = (img_pred*255).astype(np.uint8)
         imgs += [img_pred_]
         imageio.imwrite(os.path.join(dir_name, f'{i:03d}.png'), img_pred_)

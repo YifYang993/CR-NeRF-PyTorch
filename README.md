@@ -1,138 +1,197 @@
-# Ha-NeRF:laughing:: Hallucinated Neural Radiance Fields in the Wild 
-**[Project Page](https://rover-xingyu.github.io/Ha-NeRF/) |
-[Paper](https://openaccess.thecvf.com/content/CVPR2022/papers/Chen_Hallucinated_Neural_Radiance_Fields_in_the_Wild_CVPR_2022_paper.pdf) |
-[Latest arXiv](https://arxiv.org/pdf/2111.15246.pdf) |
-[Supplementary](https://rover-xingyu.github.io/Ha-NeRF/files/Ha_NeRF_CVPR_2022_supp.pdf)**
+<!-- PROJECT LOGO -->
 
-[Xingyu Chen¹](https://rover-xingyu.github.io/), 
-[Qi Zhang²](https://qzhang-cv.github.io/), 
-[Xiaoyu Li²](https://xiaoyu258.github.io/), 
-[Yue Chen¹](https://fanegg.github.io/), 
-[Ying Feng²](https://github.com/rover-xingyu/Ha-NeRF/),
-[Xuan Wang²](https://scholar.google.com/citations?user=h-3xd3EAAAAJ&hl=en/),
-[Jue Wang²](https://juewang725.github.io/). 
+<p align="center">
 
-[¹Xi'an Jiaotong University)](http://en.xjtu.edu.cn/),
-[²Tencent AI Lab](https://ai.tencent.com/ailab/en/index/).
+  <h1 align="center">CR-NeRF: Cross-Ray Neural Radiance Fields for Novel-view Synthesis from Unconstrained Image Collections</h1>
+  <p align="center">
+    <strong>Yifan Yang</strong></a>
+    ·
+    <strong>Shuhai Zhang</strong></a>
+    ·
+    <strong>Zixiong Huang</strong></a>
+    ·
+    <strong>Yubing Zhang</strong></a>
+    .
+    <strong>Mingkui Tan</strong></a>
+  </p>
+  <h2 align="center">ICCV 2023 Oral</h2>
+
+  <p align="center">
+  <br>
+    <a href='https://arxiv.org/abs/2307.08093'>
+      <img src='https://img.shields.io/badge/Paper-PDF-green?style=for-the-badge&logo=arXiv&logoColor=green' alt='Paper PDF'>
+    </a>
+  </p>
+</p>
+
+<!-- TABLE OF CONTENTS -->
+<details open="open" style='padding: 10px; border-radius:5px 30px 30px 5px; border-style: solid; border-width: 1px;'>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li>
+      <a href="#introduction-to-cr-nerf">Introduction to CR-NeRF</a>
+    </li>
+    <li>
+      <a href="#video-demo">Video Demo</a>
+    </li>
+    <li>
+      <a href="#instructions">Instructions</a>
+    </li>
+    <li>
+      <a href="#running-demo">Running Demo</a>
+    </li>
+    <li>
+    <a href="#training-and-testing">Training and testing</a>
+    </li>
+    <li>
+      <a href="#citation">Citation</a>
+    </li>
+  </ol>
+</details>
+<br />
+<br />
+
+<br>
 
 
-This repository is an official implementation of [Ha-NeRF](https://rover-xingyu.github.io/Ha-NeRF/) (Hallucinated Neural Radiance Fields in the Wild) using pytorch ([pytorch-lightning](https://github.com/PyTorchLightning/pytorch-lightning)). 
+## Introduction-to-CR-NeRF 
+|              ![Pipeline](images/pipelinev4-1.png)               |
+| :----------------------------------------------------------: |
+|       _Pipeline of CR-NeRF_       |        
+- If you want to **Train & Evaluate**, please check [dataset.md](./docs/dataset.md) to prepare dataset, see
+<a href="#training-and-testing">Training and testing</a> to train and benchmark CR-NeRF using Brandenburg Gate tainingset
 
-<!-- I try to reproduce (some of) the results on the lego dataset (Section D). Training on [Phototourism real images](https://github.com/ubc-vision/image-matching-benchmark) (as the main content of the paper) has also passed. Please read the following sections for the results.
+- During evaluation, given:
+  - A RGB image of a desired image style
+  - Camera position
 
-The code is largely based on NeRF implementation (see master or dev branch), the main difference is the model structure and the rendering process, which can be found in the two files under `models/`. -->
+with our CR-NeRF You will get:
+  - image:
+    - with the same camera position as the given one
+    - with the same image style as the given image
 
-# :computer: Installation
+For more details of our CR-NeRF, see architecture visualization in our [encoder](images/architecture/encoder.pdf), [transformation net](images/architecture/transformation_net.pdf), and [decoder](images/architecture/decoder.pdf)
 
-## Hardware
+<br/>
 
-* OS: Ubuntu 18.04
-* NVIDIA GPU with **CUDA>=10.2** (tested with 1 RTX2080Ti)
 
-## Software
 
-* Clone this repo by `git clone https://github.com/rover-xingyu/Ha-NeRF`
-* Python>=3.6 (installation via [anaconda](https://www.anaconda.com/distribution/) is recommended, use `conda create -n HaNeRF python=3.6` to create a conda environment and activate it by `conda activate HaNeRF`)
-* Python libraries
-    * Install core requirements by `pip install -r requirements.txt`
-    
-# :key: Training
+<br>
 
-## Data download
+## Video-Demo
 
-Download the scenes you want from [here](https://www.cs.ubc.ca/~kmyi/imw2020/data.html) 
+### Appearance Hallucination
 
-Download the train/test split from [here](https://nerf-w.github.io/) and put under each scene's folder (the **same level** as the "dense" folder)
+---
 
-(Optional but **highly** recommended) Run `python3.6 prepare_phototourism.py --root_dir $ROOT_DIR --img_downscale {an integer, e.g. 2 means half the image sizes}` to prepare the training data and save to disk first, if you want to run multiple experiments or run on multiple gpus. This will **largely** reduce the data preparation step before training.
+#### Trevi Fountain
 
-Run (example)
+[![](https://res.cloudinary.com/marcomontalbano/image/upload/v1689654478/video_to_markdown/images/youtube--H2GcYWkLT4Q-c05b58ac6eb4c4700831b2b3070cd403.jpg)](https://youtu.be/H2GcYWkLT4Q "")
 
+#### Brandenburg Gate
+
+[![](https://res.cloudinary.com/marcomontalbano/image/upload/v1689654573/video_to_markdown/images/youtube--2GDLd55-6_w-c05b58ac6eb4c4700831b2b3070cd403.jpg)](https://youtu.be/2GDLd55-6_w "")
+
+### Cross-Appearance Hallucination
+
+---
+#### From Trevi Fountain to Brandenburg Gate
+
+[![](https://res.cloudinary.com/marcomontalbano/image/upload/v1689654703/video_to_markdown/images/youtube--CiDV4_0UHOE-c05b58ac6eb4c4700831b2b3070cd403.jpg)](https://youtu.be/CiDV4_0UHOE "")
+
+#### From Brandenburg Gate to Trevi Fountain
+
+[![](https://res.cloudinary.com/marcomontalbano/image/upload/v1689654738/video_to_markdown/images/youtube--efGp77IK2Uo-c05b58ac6eb4c4700831b2b3070cd403.jpg)](https://youtu.be/efGp77IK2Uo "")
+
+### Appearance Hallucination
+---
+
+[![](https://res.cloudinary.com/marcomontalbano/image/upload/v1689654784/video_to_markdown/images/youtube--WnHQJv-n4no-c05b58ac6eb4c4700831b2b3070cd403.jpg)](https://youtu.be/WnHQJv-n4no "")
+
+### Comparison with NeRF-W
+---
+[![](images/comparison_with_nerfw.png)](https://youtu.be/qblThzrP70Y "")
+
+
+<br/>
+
+
+<br>
+
+## Instructions
+
+- See [docs/installation.md](docs/installation.md) to install all the required packages and setup the models
+- See [docs/dataset.md](docs/dataset.md) to prepare the in-the-wild datasets
+- See <a href="#training-and-testing">Training and testing</a> to train and benchmark CR-NeRF using Brandenburg Gate tainingset
+
+<br/>
+
+
+
+<br>
+
+
+<br>
+
+
+## Running Demo
+Download trained checkpoints from:
+[google drive](https://drive.google.com/drive/folders/1yuV8_FtqCPtDN1g8t_4kZaKwoXbTuqZe?usp=sharing)
+or 
+[Baidu drive](链接：https://pan.baidu.com/s/1BD29dnHn0vQHWyazgexIXQ?pwd=z6wd)
+password: z6wd 
+
+**If you want video demo**
+```bash
+#Set $scene_name and $save_dir1 and cuda devices in command/get_video_demo.sh
+bash command/get_video_demo.sh
 ```
-python3.6 prepare_phototourism.py --root_dir /path/to/the/datasets/brandenburg_gate/ --img_downscale 2
+The rendered video (in .gif format) will be in path "{$save_dir1}/appearance_modification/{$scene_name}"
+
+**If you want images for evaluating metrics**
+```bash
+bash command/get_rendered_images.sh
+```
+The rendered images will be in path "{$save_dir1}/{$exp_name1}"
+
+## Training and testing
+
+```bash
+#Set experiment name and cuda devices in train.sh 
+bash command/train.sh
+#Set the experiment name to match the training name, and set cuda devices in test.sh 
+bash command/test.sh
 ```
 
-## Training model
-Run (example)
-```
-python3.6 train_mask_grid_sample.py \
-  --root_dir /path/to/the/datasets/brandenburg_gate/ --dataset_name phototourism \
-  --save_dir save \
-  --img_downscale 2 --use_cache \
-  --N_importance 64 --N_samples 64 \
-  --num_epochs 20 --batch_size 1024 \
-  --optimizer adam --lr 5e-4 --lr_scheduler cosine \
-  --exp_name exp_HaNeRF_Brandenburg_Gate \
-  --N_emb_xyz 15 --N_vocab 1500 \
-  --use_mask --maskrs_max 5e-2 --maskrs_min 6e-3 --maskrs_k 1e-3 --maskrd 0 \
-  --encode_a --N_a 48 --weightKL 1e-5 --encode_random --weightRecA 1e-3 --weightMS 1e-6 \
-  --num_gpus 4
-```
+<br/>
+<br/>
 
-Add `--encode_a` for using appearance hallucination module, `--use_mask` for using  anti-occlusion module. `--N_vocab` should be set to an integer larger than the number of images (dependent on different scenes). For example, "brandenburg_gate" has in total 1363 images (under `dense/images/`), so any number larger than 1363 works (no need to set to exactly the same number). **Attention!** If you forget to set this number, or it is set smaller than the number of images, the program will yield `RuntimeError: CUDA error: device-side assert triggered` (which comes from `torch.nn.Embedding`).
+## Citation
 
-See [opt.py](opt.py) for all configurations.
-
-The checkpoints and logs will be saved to `{save_dir}/ckpts/{scene_name} ` and `{save_dir}/logs/{scene_name}`, respectively.
-
-You can monitor the training process by `tensorboard --logdir save/logs/exp_HaNeRF_Brandenburg_Gate --port=8600` and go to `localhost:8600` in your browser.
-
-# :mag_right: Evaluation
-
-Use [eval.py](eval.py) to inference on all test data. It will create folder `{save_dir}/results/{dataset_name}/{scene_name}` and save the rendered
-images.
-
-Run (example)
-```
-python3.6 eval.py \
-  --root_dir /path/to/the/datasets/brandenburg_gate/ \
-  --save_dir save \
-  --dataset_name phototourism --scene_name HaNeRF_Trevi_Fountain \
-  --split test_test --img_downscale 2 \
-  --N_samples 256 --N_importance 256 --N_emb_xyz 15 \
-  --N_vocab 1500 --encode_a \
-  --ckpt_path save/ckpts/HaNeRF_Brandenburg_Gate/epoch\=19.ckpt \
-  --chunk 16384 --img_wh 320 240
-```
-
-Then you can use [eval_metric.py](eval_metric.py) to get the quantitative report of different metrics based on the rendered images from [eval.py](eval.py). It will create a file `result.txt` in the folder `{save_dir}/results/{dataset_name}/{scene_name}` and save the metrics.
-
-Run (example)
-```
-python3.6 eval_metric.py \
-  --root_dir /path/to/the/datasets/brandenburg_gate/ \
-  --save_dir save \
-  --dataset_name phototourism --scene_name HaNeRF_Trevi_Fountain \
-  --split test_test --img_downscale 2 \
-  --img_wh 320 240
-```
-
-# :laughing: Hallucination
-
-Use [hallucinate.py](hallucinate.py) to play with Ha-NeRF by hallucinating appearance from different scenes `{example_image}` in different views! It will create folder `{save_dir}/hallucination/{scene_name}` and render the hallucinations, finally create a gif out of them.
-
-Run (example)
-```
-python3.6 hallucinate.py \
-    --save_dir save \
-    --ckpt_path save/ckpts/HaNeRF_Trevi_Fountain/epoch\=19.ckpt \
-    --chunk 16384 \
-    --example_image artworks \
-    --scene_name artworks_2_fountain
-```
-
-# Cite
-If you find our work useful, please consider citing:
 ```bibtex
-@inproceedings{chen2022hallucinated,
-  title={Hallucinated neural radiance fields in the wild},
-  author={Chen, Xingyu and Zhang, Qi and Li, Xiaoyu and Chen, Yue and Feng, Ying and Wang, Xuan and Wang, Jue},
-  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
-  pages={12943--12952},
-  year={2022}
+@article{yang2023cross,
+  title={Cross-Ray Neural Radiance Fields for Novel-view Synthesis from Unconstrained Image Collections},
+  author={Yang, Yifan and Zhang, Shuhai and Huang, Zixiong and Zhang, Yubing and Tan, Mingkui},
+  journal={arXiv preprint arXiv:2307.08093},
+  year={2023}
 }
 ```
 
-# Acknowledge
-Our code is based on the awesome pytorch implementation of NeRF in the Wild ([NeRF-W](https://github.com/kwea123/nerf_pl/tree/nerfw/)). We appreciate all the contributors.
-# nerfW
+## Acknowledgments
+
+We thank [Dong Liu](https://github.com/AnderDong)'s help in making the video demo
+
+Here are some great resources we benefit from:
+
+- [NeRF-W](https://github.com/kwea123/nerf_pl.git) 
+- [Ha-NeRF](https://github.com/rover-xingyu/Ha-NeRF.git)
+- [LinearStyleTransfer](https://github.com/sunshineatnoon/LinearStyleTransfer.git)
+- [CGNet](https://github.com/wutianyiRosun/CGNet.git)
+
+<br>
+
+## License
+
+By downloading and using the code and model you agree to the terms in the [LICENSE](LICENSE).
+
+

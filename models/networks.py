@@ -48,3 +48,4 @@ class implicit_mask(nn.Module):
     def forward(self, x):
         mask = self.mask_mapping(x)
         return mask
+

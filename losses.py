@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 import math
+from einops import rearrange
 
 class ColorLoss(nn.Module):
     def __init__(self, coef=1):
@@ -37,35 +38,35 @@ class ExponentialAnnealingWeight():
     def getWeight(self, Tcur):
         return max(self.min, self.max * math.exp(-Tcur*self.k))
 
-class HaNeRFLoss(nn.Module):
+
+class CRNeRFLoss(nn.Module):
     def __init__(self, hparams, coef=1, lambda_u=0.01):
         super().__init__()
         self.coef = coef
         self.lambda_u = lambda_u
-        # self.Annealing = CosineAnnealingWeight(max = hparams.maskrs_max, min = hparams.maskrs_min, Tmax = hparams.num_epochs-1)
         self.Annealing = ExponentialAnnealingWeight(max = hparams.maskrs_max, min = hparams.maskrs_min, k = hparams.maskrs_k)
         self.mse_loss = nn.MSELoss()
 
     def forward(self, inputs, targets, hparams, global_step):
         ret = {}
-
         if 'a_embedded' in inputs:
             ret['kl_a'] = self._l2_regularize(inputs['a_embedded']) * hparams.weightKL
             if 'a_embedded_random_rec' in inputs:
-                ret['rec_a_random'] = torch.mean(torch.abs(inputs['a_embedded_random'].detach() - inputs['a_embedded_random_rec'])) * hparams.weightRecA
-                # ret['mode_seeking'] = hparams.weightMS * 1 / \
-                #   ((torch.mean(torch.abs(inputs['rgb_fine'].detach() - inputs['rgb_fine_random'])) / \
-                #   torch.mean(torch.abs(inputs['a_embedded'].detach() - inputs['a_embedded_random'].detach()))) + 1 * 1e-5)
-
+                if hparams.mse_on_appearance:
+                    ret['rec_a_random'] =((inputs['a_embedded_random'].detach() -  inputs['a_embedded_random_rec'])**2).mean() * hparams.weightRecA
+                else:ret['rec_a_random'] = torch.mean(torch.abs(inputs['a_embedded_random'].detach() - inputs['a_embedded_random_rec'])) * hparams.weightRecA
+                
+                
         if 'out_mask' in inputs:
             mask = inputs['out_mask']
             ret['c_l'] = 0.5 * ((1 - mask.detach()) * (inputs['rgb_coarse'] - targets)**2).mean()
         else:
             ret['c_l'] = 0.5 * ((inputs['rgb_coarse'] - targets)**2).mean()
-
+        if 'content_wo_a_embed' in inputs and 'content_with_a_embed' in inputs: 
+            ret['content_constraint'] =((inputs['content_wo_a_embed'] - inputs['content_with_a_embed'])**2).mean() * hparams.weightcontent
         if 'rgb_fine' in inputs:
             if 'out_mask' in inputs:
-                ret['r_ms'], ret['r_md'] = self.mask_regularize(inputs['out_mask'],  self.Annealing.getWeight(global_step), hparams.maskrd)
+                ret['r_ms'], ret['r_md'] = self.mask_regularize(inputs['out_mask'],  self.Annealing.getWeight(global_step), hparams.maskrd) ##avoid masking everything
                 ret['f_l'] = 0.5 * ((1 - mask) * (inputs['rgb_fine'] - targets)**2).mean()
             else:
                 ret['f_l'] = 0.5 * ((inputs['rgb_fine']-targets)**2).mean()
@@ -93,4 +94,4 @@ class HaNeRFLoss(nn.Module):
         return encoding_loss
 
 loss_dict = {'color': ColorLoss,
-             'hanerf': HaNeRFLoss}
+             'crnerf': CRNeRFLoss}

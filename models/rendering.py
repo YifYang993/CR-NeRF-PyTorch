@@ -1,7 +1,7 @@
 import torch
 from einops import rearrange, reduce, repeat
 
-__all__ = ['render_rays']
+__all__ = ['render_rays_cross_ray']
 
 
 def sample_pdf(bins, weights, N_importance, det=False, eps=1e-5):
@@ -46,7 +46,8 @@ def sample_pdf(bins, weights, N_importance, det=False, eps=1e-5):
     return samples
 
 
-def render_rays(models,
+
+def render_rays_cross_ray(models,
                 embeddings,
                 rays,
                 ts,
@@ -74,13 +75,11 @@ def render_rays(models,
         N_importance: number of fine samples per ray
         chunk: the chunk size in batched inference
         white_back: whether the background is white (dataset dependent)
-        test_time: whether it is test (inference only) or not. If True, it will not do inference
-                   on coarse rgb to save time
     Outputs:
         result: dictionary containing final rgb and depth maps for coarse and fine models
     """
 
-    def inference(results, model, xyz, z_vals, test_time=False, **kwargs):
+    def inference(results, models, xyz, z_vals, test_time=False,fine=False, **kwargs):
         """
         Helper function that performs model inference.
         Inputs:
@@ -93,44 +92,31 @@ def render_rays(models,
             z_vals: (N_rays, N_samples_) depths of the sampled positions
             test_time: test time or not
         """
+        args=kwargs['args']
+        if fine:
+            model=models['fine']
+        else:model=models['coarse']
         typ = model.typ
-        N_samples_ = xyz.shape[1]
+        N_samples_ = xyz.shape[1] ##torch.Size([8192, 64, 3])
         xyz_ = rearrange(xyz, 'n1 n2 c -> (n1 n2) c', c=3)
-
-        # Perform model inference to get rgb and raw sigma
+        if args.pertubeCord==True:
+            pertube_ratio=0.00001
+            xyz_+=pertube_ratio*torch.rand(xyz_.size(),device=xyz_.device)
+        # Perform model inference to get cross-ray features
         B = xyz_.shape[0]
         out_chunks = []
-        if typ=='coarse' and test_time:
-            for i in range(0, B, chunk):
-                xyz_embedded = embedding_xyz(xyz_[i:i+chunk])
-                out_chunks += [model(xyz_embedded, sigma_only=True)]
-            out = torch.cat(out_chunks, 0)
-            static_sigmas = rearrange(out, '(n1 n2) 1 -> n1 n2', n1=N_rays, n2=N_samples_)
-        else: # infer rgb and sigma and others
-            dir_embedded_ = repeat(dir_embedded, 'n1 c -> (n1 n2) c', n2=N_samples_)
-            # create other necessary inputs
-            if model.encode_appearance:
-                a_embedded_ = repeat(a_embedded, 'n1 c -> (n1 n2) c', n2=N_samples_)
-            if model.encode_random:
-                a_embedded_random_ = repeat(a_embedded_random, 'n1 c -> (n1 n2) c', n2=N_samples_)
+        dir_embedded_ = repeat(dir_embedded, 'n1 c -> (n1 n2) c', n2=N_samples_)
+    
+        for i in range(0, B, chunk):
+            inputs = [embedding_xyz(xyz_[i:i+chunk]), dir_embedded_[i:i+chunk]]
+            feature_of_nerf=model(torch.cat(inputs, 1), output_random=output_random)
+            #get cross-ray features
+            out_chunks += [feature_of_nerf]
 
-            for i in range(0, B, chunk):
-                # inputs for original NeRF
-                inputs = [embedding_xyz(xyz_[i:i+chunk]), dir_embedded_[i:i+chunk]]
-                # additional inputs for NeRF-W
-                if model.encode_appearance:
-                    inputs += [a_embedded_[i:i+chunk]]
-                if model.encode_random:
-                    inputs += [a_embedded_random_[i:i+chunk]]
-                out_chunks += [model(torch.cat(inputs, 1), output_random=output_random)]
-
-            out = torch.cat(out_chunks, 0)
-            out = rearrange(out, '(n1 n2) c -> n1 n2 c', n1=N_rays, n2=N_samples_)
-            static_rgbs = out[..., :3] # (N_rays, N_samples_, 3)
-            static_sigmas = out[..., 3] # (N_rays, N_samples_)
-            if output_random:
-                static_rgbs_random = out[..., 4:]
-
+        out = torch.cat(out_chunks, 0) 
+        out = rearrange(out, '(n1 n2) c -> n1 n2 c', n1=N_rays, n2=N_samples_)
+        static_rgbs = out[..., :args.nerf_out_dim] # (N_rays, N_samples_, 3)
+        static_sigmas = out[...,args.nerf_out_dim] # (N_rays, N_samples_)
         # Convert these values using volume rendering
         deltas = z_vals[:, 1:] - z_vals[:, :-1] # (N_rays, N_samples_-1)
         delta_inf = 1e2 * torch.ones_like(deltas[:, :1]) # (N_rays, 1) the last delta is infinity
@@ -144,29 +130,20 @@ def render_rays(models,
         transmittance = torch.cumprod(alphas_shifted[:, :-1], -1) # [1, 1-a1, (1-a1)(1-a2), ...]
 
         weights = alphas * transmittance
-        weights_sum = reduce(weights, 'n1 n2 -> n1', 'sum')
 
         results[f'weights_{typ}'] = weights
-        results[f'opacity_{typ}'] = weights_sum
-
-        if test_time and typ == 'coarse':
-            return
 
         rgb_map = reduce(rearrange(weights, 'n1 n2 -> n1 n2 1')*static_rgbs,
                           'n1 n2 c -> n1 c', 'sum')
-        if white_back:
-            rgb_map += 1-rearrange(weights_sum, 'n -> n 1')
-        results[f'rgb_{typ}'] = rgb_map
-
+        results[f'feature_{typ}'] = rgb_map
+        
         if output_random:
-            rgb_map_random = reduce(rearrange(weights, 'n1 n2 -> n1 n2 1')*static_rgbs_random,
-                            'n1 n2 c -> n1 c', 'sum')
-            if white_back:
-                rgb_map_random += 1-rearrange(weights_sum, 'n -> n 1')
-            results[f'rgb_{typ}_random'] = rgb_map_random
+            results[f'feature_fine_random'] = rgb_map
 
         results[f'depth_{typ}'] = reduce(weights*z_vals, 'n1 n2 -> n1', 'sum')
+
         return
+
 
     embedding_xyz, embedding_dir = embeddings['xyz'], embeddings['dir']
 
@@ -199,11 +176,9 @@ def render_rays(models,
         z_vals = lower + (upper - lower) * perturb_rand
 
     xyz_coarse = rays_o + rays_d * rearrange(z_vals, 'n1 n2 -> n1 n2 1')
-
     results = {}
     output_random = False
-    inference(results, models['coarse'], xyz_coarse, z_vals, test_time, **kwargs)
-
+    inference(results, models, xyz_coarse, z_vals, test_time, **kwargs)
     if N_importance > 0: # sample points for fine model
         z_vals_mid = 0.5 * (z_vals[: ,:-1] + z_vals[: ,1:]) # (N_rays, N_samples-1) interval mid points
         z_vals_ = sample_pdf(z_vals_mid, results['weights_coarse'][:, 1:-1].detach(),
@@ -213,19 +188,20 @@ def render_rays(models,
         xyz_fine = rays_o + rays_d * rearrange(z_vals, 'n1 n2 -> n1 n2 1')
 
         model = models['fine']
-        if model.encode_appearance:
-            if 'a_embedded_from_img' in kwargs:
-                a_embedded = kwargs['a_embedded_from_img'].repeat(xyz_fine.size(0), 1)
-            elif 'a_embedded' in kwargs:
-                a_embedded = kwargs['a_embedded']
-            else:
-                a_embedded = embeddings['a'](ts)
-
-        if model.encode_random:
-            a_embedded_random = kwargs['a_embedded_random'].repeat(xyz_fine.size(0), 1)
 
         output_random = kwargs.get('output_random', True) and model.encode_random
 
-        inference(results, model, xyz_fine, z_vals, test_time, **kwargs)
+        inference(results, models, xyz_fine, z_vals, test_time,fine=True, **kwargs)
 
     return results
+
+
+def docode(results, models,type,**kwargs):
+        feature_coarse=results['rgb_'+type] #torch.Size([699008, 4])
+        lastdim=feature_coarse.size(-1)
+        feature_coarse = rearrange(feature_coarse, 'n1 n3 -> n3 n1', n3=lastdim)
+        feature_coarse = rearrange(feature_coarse, ' n3 (h w) ->  1 n3 h w',  h=int(kwargs['H']), w=int(kwargs['W']),n3=lastdim)  ##torch.Size([1, 64, 340, 514])
+        rgbs_pred_coarse=models['decoder'](feature_coarse, kwargs['a_embedded_from_img'])
+        rgbs_pred_coarse=rearrange(rgbs_pred_coarse, ' 1 n1 h w ->  (h w) n1',  h=int(kwargs['H']), w=int(kwargs['W']), n1=3)
+        results['rgb_'+type]=rgbs_pred_coarse
+        return results
