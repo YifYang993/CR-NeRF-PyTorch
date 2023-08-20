@@ -26,7 +26,7 @@ CUDA_VISIBLE_DEVICES=3  python train_mask_grid_sample.py --root_dir $root_dir1 -
 
 
 #test#
-cd /mnt/cephfs/dataset/NVS/nerfInWild/experimental_results/logs/$exp_name1/codes
+cd /mnt/cephfs/dataset/NVS/nerfInWild/experimental_results/logs/$exp_name1/codes  
 
 #render image#
 CUDA_VISIBLE_DEVICES=3 python eval.py \
