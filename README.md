@@ -169,10 +169,11 @@ bash command/test.sh
 ## Citation
 
 ```bibtex
-@article{yang2023cross,
+@inproceedings{yang2023cross,
   title={Cross-Ray Neural Radiance Fields for Novel-view Synthesis from Unconstrained Image Collections},
   author={Yang, Yifan and Zhang, Shuhai and Huang, Zixiong and Zhang, Yubing and Tan, Mingkui},
-  journal={arXiv preprint arXiv:2307.08093},
+  booktitle={Proceedings of the IEEE/CVF International Conference on Computer Vision},
+  pages={15901--15911},
   year={2023}
 }
 ```
