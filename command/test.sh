@@ -10,7 +10,7 @@ decoder='linearStyle'
 ckpt_path1="ckpts/CR-NeRF-branden.ckpt" 
 dataset_name1='phototourism'
 decoder_num_res_blocks=1
-img_downscale=2
+img_downscale=4 #The provided model is trained with image resolution downscale ratio = 4.
 nerf_out_dim1=64
 
 #################### render image ####################

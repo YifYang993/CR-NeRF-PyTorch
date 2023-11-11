@@ -16,7 +16,7 @@ root_dir1="/mnt/cephfs/dataset/NVS/nerfInWild/brandenburg_gate/"
 dataset_name1='phototourism'
 save_dir1=/mnt/cephfs/dataset/NVS/nerfInWild/experimental_results
 decoder_num_res_blocks=1
-img_downscale=2
+img_downscale=4  ##Change this to 2 if you want to reproduce the results with image resolution downscale ratio = 2, note that downscale =2 requires more training and inference time due to the larger image size.
 
 
 

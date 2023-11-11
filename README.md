@@ -138,7 +138,7 @@ For more details of our CR-NeRF, see architecture visualization in our [encoder]
 Download trained checkpoints from:
 [google drive](https://drive.google.com/drive/folders/1yuV8_FtqCPtDN1g8t_4kZaKwoXbTuqZe?usp=sharing)
 or 
-[Baidu drive](链接：https://pan.baidu.com/s/1BD29dnHn0vQHWyazgexIXQ?pwd=z6wd)
+[Baidu drive](https://pan.baidu.com/s/1BD29dnHn0vQHWyazgexIXQ?pwd=z6wd)
 password: z6wd 
 
 **If you want video demo**
